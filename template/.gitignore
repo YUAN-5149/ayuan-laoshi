@@ -1,0 +1,7 @@
+# 機密檔案 — 絕對不要上傳
+pipeline/client_secret.json
+pipeline/token.json
+
+# 產出與紀錄
+output/
+logs/

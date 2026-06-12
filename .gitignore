@@ -1,0 +1,8 @@
+# 機密
+**/client_secret.json
+**/token.json
+
+# 雜項
+*.log
+output/
+logs/
