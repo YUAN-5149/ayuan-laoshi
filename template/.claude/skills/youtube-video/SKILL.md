@@ -5,7 +5,7 @@ description: 製作並上傳一支 YouTube 知識短片的完整 SOP。當需要
 
 # 製作並上傳一支 YouTube 知識短片
 
-工作目錄為本專案根目錄（CLAUDE.md 所在處），以下相對路徑都以此為準。
+工作目錄固定為 `C:\Users\TFD\ai-youtuber\`，以下相對路徑都以此為準。
 
 ## 流程
 
@@ -19,32 +19,49 @@ description: 製作並上傳一支 YouTube 知識短片的完整 SOP。當需要
 - 250~400 字（約 1.5~2.5 分鐘旁白）。
 - 遵守 CLAUDE.md 的腳本撰寫鐵則（縮寫拆字母、數字中文化、三段結構）。
 
-### 3. 做投影片（4~6 張字卡）
+### 3. 選吉祥物姿勢（手繪風頻道視覺）
+- 頻道吉祥物是「消防員阿遠」，素材在 `_ref\` 資料夾。
+- 依今天主題挑一個合適姿勢；可用對照表自動挑：
 ```
-python pipeline\make_slide.py "標題文字" "重點內文" output\<日期>\slides\001.png
+python pipeline\mascot.py "今天的主題關鍵字"   # 印出最合適的素材路徑
+python pipeline\mascot.py --list              # 看所有可用姿勢
 ```
-- 第一張：影片標題卡。中間：每個重點一張。最後一張：「謝謝收看／請訂閱」收尾卡。
-- 可選：在 `output\<日期>\slides\timing.txt` 每行寫一個秒數控制每張停留時間（需與旁白段落對齊），不寫則平均分配。
+- 投影片與縮圖都用 `auto:<主題關鍵字>` 讓系統自動挑同一隻姿勢，保持一致。
 
-### 4. 配音
+### 4. 做投影片（4~6 張字卡，手繪風）
+```
+python pipeline\make_slide.py "標題文字" "重點內文" output\<日期>\slides\001.png "auto:<主題關鍵字>"
+```
+- **標題卡（第一張）與收尾卡（最後一張）務必帶第 4 個參數**讓吉祥物入鏡；中間內容卡可帶可不帶（不帶就純文字，版面較乾淨）。
+- 標題會自動用粉圓體手寫風呈現；內文放重點短句。
+- 可選：`output\<日期>\slides\timing.txt` 每行一個秒數控制每張停留時間（總和不必等於旁白，make_video 會自動縮放）。
+
+### 5. 配音
 ```
 python pipeline\tts.py output\<日期>\script.txt output\<日期>\narration.mp3
 ```
 
-### 5. 合成影片
+### 6. 合成影片
 ```
 python pipeline\make_video.py output\<日期>\slides output\<日期>\narration.mp3 output\<日期>\final.mp4
 ```
 - 確認 final.mp4 存在且大小 > 100KB。
 
-### 6. 上傳 YouTube
+### 7. 做縮圖（手繪風，依主題挑姿勢）
 ```
-python pipeline\upload_youtube.py output\<日期>\final.mp4 "影片標題" "影片描述`n`n本頻道由 AI Agent 自主經營" "AI,人工智慧,科普"
+python pipeline\make_thumbnail.py "吸睛標題|紅字強調詞" "一句副標" "auto:<主題關鍵字>" output\<日期>\thumb.png
 ```
-- 標題 ≤ 100 字元，吸睛但不誇大。
+- 標題用｜分隔主標與要標紅的關鍵字（例：`什麼是 RAG？|RAG`）。
+
+### 8. 上傳 YouTube（含縮圖）
+```
+python pipeline\upload_youtube.py output\<日期>\final.mp4 "影片標題" "影片描述`n`n本頻道由 AI Agent 自主經營" "AI,人工智慧,科普" output\<日期>\thumb.png
+```
+- 標題 ≤ 100 字元，吸睛但不誇大。第 5 個參數是縮圖（頻道未驗證時縮圖會失敗但影片仍會上傳）。
 - 若 `pipeline\client_secret.json` 不存在，停止並回報使用者需要先完成 YouTube OAuth 設定。
 - 上傳成功會印出 `https://youtu.be/<id>`。
 
-### 7. 更新記憶（必做）
+### 9. 更新記憶（必做）
 - 把影片標題、網址、日期、主題寫進 `MEMORY.md` 已發布清單。
 - 若有觀察到前幾支影片的數據，寫下「下次改進方向」。
+- 可順手在 `DIARY.md` 寫一則今天的心得/趣事（見 CLAUDE.md 的日記習慣）。

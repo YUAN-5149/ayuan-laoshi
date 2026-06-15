@@ -69,11 +69,29 @@ Step "安裝 Python 套件"
 python -m pip install --quiet edge-tts pillow google-api-python-client google-auth-oauthlib requests
 Ok "edge-tts, pillow, google-api-python-client, google-auth-oauthlib"
 
+# ---------- 4.5 下載手繪風可愛字型（jf 開源粉圓體） ----------
+Step "下載可愛字型（粉圓體）"
+$fontDir = Join-Path $InstallDir "assets\fonts"
+New-Item -ItemType Directory -Force $fontDir | Out-Null
+$fontPath = Join-Path $fontDir "openhuninn.ttf"
+if (Test-Path $fontPath) {
+    Ok "字型已存在"
+} else {
+    $furls = @(
+        "https://github.com/justfont/open-huninn-font/releases/download/v2.1/jf-openhuninn-2.1.ttf",
+        "https://github.com/justfont/open-huninn-font/releases/download/v2.0/jf-openhuninn-2.0.ttf")
+    $fok = $false
+    foreach ($u in $furls) {
+        try { Invoke-WebRequest $u -OutFile $fontPath -ErrorAction Stop; $fok = $true; break } catch {}
+    }
+    if ($fok) { Ok "粉圓體已下載" } else { Write-Host "    [!] 字型下載失敗，將退回系統標楷體" -ForegroundColor Yellow }
+}
+
 # ---------- 5. 部署 Agent 工作區 ----------
 Step "部署 Agent 工作區到 $InstallDir"
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
-# MEMORY.md 是 Agent 的記憶，重跑安裝不可覆蓋
-$skipIfExists = @("MEMORY.md")
+# MEMORY.md 與 DIARY.md 是 Agent 的記憶/日記，重跑安裝不可覆蓋
+$skipIfExists = @("MEMORY.md", "DIARY.md")
 Get-ChildItem "$here\template" -Recurse -File -Force | ForEach-Object {
     $rel = $_.FullName.Substring("$here\template".Length + 1)
     $dest = Join-Path $InstallDir $rel

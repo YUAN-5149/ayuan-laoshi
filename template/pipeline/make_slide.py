@@ -1,38 +1,26 @@
-"""產生簡單的字卡投影片 PNG（1920x1080，深色背景＋大字）。
+"""手繪風投影片字卡產生器（1920x1080）。
 
 用法:
-    python make_slide.py "標題文字" "內文文字(可空)" output.png
+    python make_slide.py "標題文字" "內文文字(可空)" output.png [mascot]
+
+[mascot] 選填：素材 png 路徑，或 auto:主題關鍵字。給了就讓吉祥物在右下角入鏡。
+相容舊版三參數呼叫（無吉祥物）。
 """
+import random
 import sys
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+
+import mascot as mascot_lib
+import style as S
 
 W, H = 1920, 1080
-BG = (18, 24, 38)
-FG = (240, 240, 245)
-ACCENT = (255, 196, 60)
-
-FONT_CANDIDATES = [
-    r"C:\Windows\Fonts\msjhbd.ttc",   # 微軟正黑體 粗體
-    r"C:\Windows\Fonts\msjh.ttc",
-    r"C:\Windows\Fonts\arialbd.ttf",
-]
 
 
-def load_font(size):
-    for p in FONT_CANDIDATES:
-        try:
-            return ImageFont.truetype(p, size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
-
-
-def wrap(draw, text, font, max_w):
+def wrap(measure, text, font, max_w):
     lines, line = [], ""
     for ch in text:
-        if ch == "\n" or draw.textlength(line + ch, font=font) > max_w:
-            lines.append(line)
-            line = "" if ch == "\n" else ch
+        if ch == "\n" or measure.textlength(line + ch, font=font) > max_w:
+            lines.append(line); line = "" if ch == "\n" else ch
         else:
             line += ch
     if line:
@@ -41,23 +29,42 @@ def wrap(draw, text, font, max_w):
 
 
 def main():
-    title, body, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
-    img = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, W, 14], fill=ACCENT)
+    random.seed(3)
+    title = sys.argv[1]
+    body = sys.argv[2]
+    out_path = sys.argv[3]
+    mascot_arg = sys.argv[4] if len(sys.argv) > 4 else ""
 
-    tf = load_font(96)
-    bf = load_font(56)
-    y = 200
-    for line in wrap(d, title, tf, W - 300):
-        d.text((150, y), line, font=tf, fill=ACCENT)
-        y += 130
-    y += 60
+    img = S.paper_bg(W, H)
+    d = ImageDraw.Draw(img)
+    measure = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+
+    # 頂部紅條 + 手繪外框
+    d.rectangle([0, 0, W, 16], fill=S.RED)
+    S.hand_rect(d, [40, 40, W - 40, H - 40], S.INK, 5, 3.0)
+    S.hand_star(d, 110, 120, 22, S.RED, 5)
+
+    # 吉祥物（右下入鏡，選填）
+    text_right = W - 220
+    if mascot_arg:
+        path = mascot_lib.pick(mascot_arg[5:]) if mascot_arg.startswith("auto:") else mascot_arg
+        if path:
+            mascot = S.fit_mascot(path, 560)
+            img.alpha_composite(mascot, (W - mascot.width - 90, H - mascot.height - 70))
+            text_right = W - mascot.width - 170
+
+    # 標題（手寫抖動，米白底）
+    y = S.draw_title(img, title, "", 130, 150, 130, text_right - 130, line_gap=165)
+
+    # 內文
     if body:
-        for line in wrap(d, body, bf, W - 300):
-            d.text((150, y), line, font=bf, fill=FG)
-            y += 84
-    img.save(out_path)
+        bf = S.load_font(64)
+        y += 40
+        for line in wrap(measure, body, bf, text_right - 140):
+            d.text((140, y), line, font=bf, fill=S.LINE)
+            y += 92
+
+    img.convert("RGB").save(out_path)
     print(f"OK: {out_path}")
 
 

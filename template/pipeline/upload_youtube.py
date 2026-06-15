@@ -44,6 +44,7 @@ def get_credentials():
 def main():
     video, title, desc = sys.argv[1], sys.argv[2], sys.argv[3]
     tags = sys.argv[4].split(",") if len(sys.argv) > 4 else []
+    thumbnail = sys.argv[5] if len(sys.argv) > 5 else ""
 
     yt = build("youtube", "v3", credentials=get_credentials())
     body = {
@@ -64,7 +65,18 @@ def main():
         status, resp = req.next_chunk()
         if status:
             print(f"upload {int(status.progress() * 100)}%")
-    print(f"OK: https://youtu.be/{resp['id']}")
+    vid = resp["id"]
+
+    # 設定自訂縮圖（需頻道已通過手機驗證；失敗不影響影片本身）
+    if thumbnail and os.path.exists(thumbnail):
+        try:
+            yt.thumbnails().set(
+                videoId=vid, media_body=MediaFileUpload(thumbnail)).execute()
+            print("thumbnail set OK")
+        except Exception as e:
+            print(f"thumbnail set FAILED (頻道可能尚未驗證，可手動上傳): {e}")
+
+    print(f"OK: https://youtu.be/{vid}")
 
 
 if __name__ == "__main__":
