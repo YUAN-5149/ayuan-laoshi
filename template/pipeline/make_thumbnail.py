@@ -42,7 +42,7 @@ def main():
     S.hand_star(d, 1110, 175, 16, S.LINE, 4)
 
     # 吉祥物（右側入鏡）
-    mascot = S.fit_mascot(resolve_mascot(mascot_arg), 480)
+    mascot = S.fit_mascot(resolve_mascot(mascot_arg), 480, flip=True)  # 看向左邊
     mx = W - mascot.width - 48
     img.alpha_composite(mascot, (mx, H - mascot.height - 28))
 

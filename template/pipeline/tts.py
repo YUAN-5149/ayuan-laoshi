@@ -150,10 +150,8 @@ def tts_sapi(text: str, out_path: str):
             os.remove(wav)
 
 
-def main():
-    script_path, out_path = sys.argv[1], sys.argv[2]
-    with open(script_path, encoding="utf-8") as f:
-        text = f.read().strip()
+def synth(text: str, out_path: str):
+    """單段文字轉語音，依環境變數選後端，edge-tts 失敗自動降級離線語音。"""
     if os.environ.get("GPT_SOVITS_API"):
         tts_gpt_sovits(text, out_path)
     elif os.environ.get("ELEVENLABS_API_KEY"):
@@ -166,6 +164,13 @@ def main():
         except Exception as e:
             print(f"edge-tts 失敗，改用 Windows 離線語音保底：{e}")
             tts_sapi(text, out_path)
+
+
+def main():
+    script_path, out_path = sys.argv[1], sys.argv[2]
+    with open(script_path, encoding="utf-8") as f:
+        text = f.read().strip()
+    synth(text, out_path)
     print(f"OK: {out_path}")
 
 

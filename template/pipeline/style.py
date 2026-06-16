@@ -153,7 +153,10 @@ def hand_circle(d, cx, cy, rx, ry, color, width=8, passes=2):
         d.line(pts, fill=color, width=width, joint="curve")
 
 
-def fit_mascot(mascot_path, target_h):
+def fit_mascot(mascot_path, target_h, flip=False):
+    """去背並縮放吉祥物；flip=True 水平翻轉（讓角色看向左邊）。"""
     m = remove_white_bg(Image.open(mascot_path))
+    if flip:
+        m = m.transpose(Image.FLIP_LEFT_RIGHT)
     ratio = target_h / m.height
     return m.resize((max(1, int(m.width * ratio)), target_h), Image.LANCZOS)

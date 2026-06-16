@@ -56,7 +56,7 @@ def main():
     if mascot_arg:
         path = mascot_lib.pick(mascot_arg[5:]) if mascot_arg.startswith("auto:") else mascot_arg
         if path:
-            mascot = S.fit_mascot(path, 560)
+            mascot = S.fit_mascot(path, 560, flip=True)  # 看向左邊（朝向內文）
             img.alpha_composite(mascot, (W - mascot.width - 90, H - mascot.height - 70))
             text_right = W - mascot.width - 170
 
