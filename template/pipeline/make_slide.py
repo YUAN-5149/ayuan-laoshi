@@ -35,6 +35,13 @@ def main():
     out_path = sys.argv[3]
     mascot_arg = sys.argv[4] if len(sys.argv) > 4 else ""
 
+    # 防呆：輸出必須是 .png（避免空參數位移時誤覆蓋素材檔）
+    if not out_path.lower().endswith(".png"):
+        sys.exit(f"拒絕執行：輸出路徑必須是 .png，收到 '{out_path}'（可能是空的內文參數造成位移）")
+    # 空內文請用 '-' 代表，避免 PowerShell 丟棄空字串參數
+    if body == "-":
+        body = ""
+
     img = S.paper_bg(W, H)
     d = ImageDraw.Draw(img)
     measure = ImageDraw.Draw(Image.new("RGB", (10, 10)))
