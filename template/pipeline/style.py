@@ -90,8 +90,11 @@ def draw_char_rot(base, ch, x, y, font, color, angle, stroke=4):
 
 
 def draw_title(base, title, emphasis, x, y, size, avail, line_gap=None,
-               jitter=True, stroke=4):
-    """逐字抖動旋轉的手寫標題，emphasis 子字串標紅。回傳結束的 y。"""
+               jitter=True, stroke=0):
+    """逐字輕微抖動的手寫標題，emphasis 子字串標紅。回傳結束的 y。
+
+    stroke 預設 0：粉圓體本身已夠粗，加描邊會糊成一團（故不再描邊）。
+    """
     d = ImageDraw.Draw(base)
     tf = load_font(size)
     measure = ImageDraw.Draw(Image.new("RGB", (10, 10)))
@@ -115,23 +118,23 @@ def draw_title(base, title, emphasis, x, y, size, avail, line_gap=None,
         cx = x
         for ch, idx in line:
             color = RED if idx in red_idx else INK
-            dy = random.uniform(-size * 0.06, size * 0.06) if jitter else 0
-            ang = random.uniform(-5, 5) if jitter else 0
+            dy = random.uniform(-size * 0.035, size * 0.035) if jitter else 0
+            ang = random.uniform(-2.5, 2.5) if jitter else 0
             draw_char_rot(base, ch, cx, cy + dy, tf, color, ang, stroke)
             cx += measure.textlength(ch, font=tf)
         cy += line_gap
     return cy
 
 
-def draw_title_center(base, text, cx, cy, size, color=INK, jitter=True, stroke=4):
+def draw_title_center(base, text, cx, cy, size, color=INK, jitter=True, stroke=0):
     """單行置中手寫標題（cx 為中心 x，cy 為頂端 y）。"""
     tf = load_font(size)
     measure = ImageDraw.Draw(Image.new("RGB", (10, 10)))
     tw = sum(measure.textlength(ch, font=tf) for ch in text)
     x = cx - tw / 2
     for ch in text:
-        dy = random.uniform(-size * 0.05, size * 0.05) if jitter else 0
-        ang = random.uniform(-4, 4) if jitter else 0
+        dy = random.uniform(-size * 0.03, size * 0.03) if jitter else 0
+        ang = random.uniform(-2.5, 2.5) if jitter else 0
         draw_char_rot(base, ch, x, cy + dy, tf, color, ang, stroke)
         x += measure.textlength(ch, font=tf)
 

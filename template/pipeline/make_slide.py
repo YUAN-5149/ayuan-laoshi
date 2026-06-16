@@ -60,16 +60,21 @@ def main():
             img.alpha_composite(mascot, (W - mascot.width - 90, H - mascot.height - 70))
             text_right = W - mascot.width - 170
 
-    # 標題（手寫抖動，米白底）
-    y = S.draw_title(img, title, "", 130, 150, 130, text_right - 130, line_gap=165)
+    # 標題（手寫輕抖，米白底）
+    y = S.draw_title(img, title, "", 130, 140, 120, text_right - 130, line_gap=150)
 
-    # 內文
+    # 內文：以 ｜ 分隔多個重點，每點一個紅色項目符號，深色大字好讀
     if body:
-        bf = S.load_font(64)
-        y += 40
-        for line in wrap(measure, body, bf, text_right - 140):
-            d.text((140, y), line, font=bf, fill=S.LINE)
-            y += 92
+        bf = S.load_font(68)
+        y += 36
+        bullets = [b.strip() for b in body.split("｜") if b.strip()]
+        for b in bullets:
+            lines = wrap(measure, b, bf, text_right - 210)
+            d.ellipse([140, y + 26, 166, y + 52], fill=S.RED)   # 紅點對齊首行
+            for line in lines:
+                d.text((196, y), line, font=bf, fill=S.INK)
+                y += 92
+            y += 22
 
     img.convert("RGB").save(out_path)
     print(f"OK: {out_path}")

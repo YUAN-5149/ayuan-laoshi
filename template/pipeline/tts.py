@@ -32,7 +32,8 @@ async def tts_edge(text: str, out_path: str):
         for i, part in enumerate(parts):
             seg = os.path.join(tmpdir, f"seg_{i:03d}.mp3")
             done, last_err = False, None
-            for _ in range(4):
+            tries = int(os.environ.get("EDGE_TTS_TRIES", "8"))
+            for _ in range(tries):
                 try:
                     await edge_tts.Communicate(part, voice, rate=rate).save(seg)
                     if os.path.exists(seg) and os.path.getsize(seg) > 200:
