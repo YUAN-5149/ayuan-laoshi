@@ -6,16 +6,38 @@ New-Item -ItemType Directory -Force "logs" | Out-Null
 $today = Get-Date -Format 'yyyy-MM-dd'
 $log = "logs\heartbeat-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 
-# 偵測「今天是否已成功發片」：MEMORY.md 的已發布清單含今天日期即視為成功。
-# 這與 Agent 自己的去重判斷同源，故重試不會重複發片。
+# 先從頻道 RSS 同步記憶：換電腦後 MEMORY.md 會空白，這步把已發布影片補回，避免撞題。
+# 失敗（沒網路等）腳本內部自會 exit 0，不擋心跳；接著的 dedup 也才會讀到最新記憶。
+"=== 同步記憶 (sync_memory) @ $(Get-Date -Format o) ===" | Add-Content $log
+python "pipeline\sync_memory.py" *>> $log
+
+# 偵測「今天是否已成功發片」：MEMORY.md 含 `<!-- PUBLISHED:YYYY-MM-DD -->` 標記才算。
+# 用明確標記避免誤判（例如 Agent 在「待處理」段落寫到今天日期會被當成已發片）。
 function Test-PublishedToday {
     if (-not (Test-Path "MEMORY.md")) { return $false }
-    return [bool](Select-String -Path "MEMORY.md" -SimpleMatch $today -Quiet)
+    $marker = "<!-- PUBLISHED:$today -->"
+    return [bool](Select-String -Path "MEMORY.md" -SimpleMatch $marker -Quiet)
 }
 
 # 若今天「已經」發過片，直接結束，避免重複工作。
 if (Test-PublishedToday) {
     "SKIP: 今天 ($today) 已有發布紀錄，無需再跑。" | Add-Content $log
+    exit 0
+}
+
+# 預檢 OAuth：缺 client_secret.json 不開 Claude（省 quota；上傳一定會敗，做白工沒意義）。
+if (-not (Test-Path "pipeline\client_secret.json")) {
+    "SKIP: 缺 pipeline\client_secret.json，請依 README 步驟 2 完成 YouTube OAuth 設定。" | Add-Content $log
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $n = New-Object System.Windows.Forms.NotifyIcon
+        $n.Icon = [System.Drawing.SystemIcons]::Warning
+        $n.Visible = $true
+        $n.ShowBalloonTip(15000, "阿遠老師 缺 OAuth 憑證", "pipeline\client_secret.json 不存在，請完成 YouTube OAuth 設定（README 步驟 2）。", [System.Windows.Forms.ToolTipIcon]::Warning)
+        Start-Sleep -Seconds 12
+        $n.Dispose()
+    } catch {}
     exit 0
 }
 

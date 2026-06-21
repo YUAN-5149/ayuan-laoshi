@@ -1,7 +1,7 @@
 """計算頻道「第幾天」與基本養成數據，供碎碎念開場與每週回顧使用。
 
-天數 = 今天 - 最早一支影片日期 + 1（讀 MEMORY.md 已發布清單的最早 yyyy-mm-dd）。
-若還沒有任何影片，回傳第 1 天。
+天數 = 今天 - 最早一支影片日期 + 1（只讀 MEMORY.md 裡的 `PUBLISHED:yyyy-mm-dd` 標記，
+因此非 AI 系列影片的日期不會干擾天數）。若還沒有任何已發布標記，回傳第 1 天。
 
 用法:
     python channel_day.py          # 印出：第 N 天｜已發布 M 支
@@ -18,7 +18,7 @@ def stats():
     dates = []
     if os.path.exists(MEMORY):
         with open(MEMORY, encoding="utf-8") as f:
-            for m in re.finditer(r"(\d{4})-(\d{2})-(\d{2})", f.read()):
+            for m in re.finditer(r"PUBLISHED:(\d{4})-(\d{2})-(\d{2})", f.read()):
                 try:
                     dates.append(datetime.date(int(m[1]), int(m[2]), int(m[3])))
                 except ValueError:

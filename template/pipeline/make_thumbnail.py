@@ -41,13 +41,18 @@ def main():
     S.hand_star(d, 1175, 110, 30, S.RED, 5)
     S.hand_star(d, 1110, 175, 16, S.LINE, 4)
 
-    # 吉祥物（右側入鏡）
-    mascot = S.fit_mascot(resolve_mascot(mascot_arg), 480, flip=True)  # 看向左邊
-    mx = W - mascot.width - 48
-    img.alpha_composite(mascot, (mx, H - mascot.height - 28))
+    # 吉祥物（右側入鏡）；_ref/ 不存在時 pick() 會回空字串，這時就跳過吉祥物
+    mpath = resolve_mascot(mascot_arg)
+    if mpath:
+        mascot = S.fit_mascot(mpath, 480, flip=True)  # 看向左邊
+        mx = W - mascot.width - 48
+        img.alpha_composite(mascot, (mx, H - mascot.height - 28))
+        title_right = mx - 100
+    else:
+        title_right = W - 100  # 沒吉祥物時標題可佔滿整個寬度
 
     # 標題
-    y = S.draw_title(img, title, emphasis, 76, 78, 104, mx - 100, line_gap=128)
+    y = S.draw_title(img, title, emphasis, 76, 78, 104, title_right, line_gap=128)
 
     # 副標題 + 紅色手繪底線
     if subtitle:
