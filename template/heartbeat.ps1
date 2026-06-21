@@ -41,6 +41,20 @@ if (-not (Test-Path "pipeline\client_secret.json")) {
     exit 0
 }
 
+# ---- 漸進公開策略 ----
+# 觀察期內發的影片設 unlisted（不公開、有連結才看得到），方便先看品質；
+# 到「公開起始日」當天起自動改成 public。env 會傳給 claude 子程序與 upload_youtube.py。
+#   想改觀察期長短：調整 $GoPublicDate（或設環境變數 YT_GO_PUBLIC_DATE 覆蓋）。
+#   想立刻全公開：把日期設成過去；想一直 unlisted：設成很遠的未來。
+# 若外部已手動指定 $env:YT_PRIVACY（例如人工測試），尊重之、不覆蓋。
+if (-not $env:YT_PRIVACY) {
+    if ($env:YT_GO_PUBLIC_DATE) { $GoPublicDate = [datetime]$env:YT_GO_PUBLIC_DATE }
+    else { $GoPublicDate = [datetime]'2026-06-29' }
+    if ((Get-Date).Date -lt $GoPublicDate.Date) { $env:YT_PRIVACY = 'unlisted' }
+    else { $env:YT_PRIVACY = 'public' }
+    "PRIVACY=$($env:YT_PRIVACY)（公開起始日 $($GoPublicDate.ToString('yyyy-MM-dd'))）" | Add-Content $log
+}
+
 $maxAttempts = 2
 for ($i = 1; $i -le $maxAttempts; $i++) {
     "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o) ===" | Add-Content $log
