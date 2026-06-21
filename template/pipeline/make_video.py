@@ -14,6 +14,30 @@ import sys
 FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
 FFPROBE = os.environ.get("FFPROBE", "ffprobe")
 
+_FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "assets", "fonts")
+SUB_FONT = "jf-openhuninn-2.1"   # assets/fonts/openhuninn.ttf 的字型家族名
+
+
+def _ass_escape(path: str) -> str:
+    """把 Windows 路徑轉成 ffmpeg subtitles filter 吃得下的字串（/ 取代 \\、跳脫冒號）。"""
+    return path.replace("\\", "/").replace(":", "\\:")
+
+
+def build_subs_filter(slides_dir: str):
+    """slides_dir 內有 subtitles.srt 就回傳燒字幕用的 filter 片段，否則回傳 None。"""
+    srt = os.path.join(slides_dir, "subtitles.srt")
+    if not os.path.exists(srt):
+        return None
+    style = (
+        f"FontName={SUB_FONT},Fontsize=20,"
+        "PrimaryColour=&H00FFFFFF,OutlineColour=&H00282C2C,BackColour=&H64000000,"
+        "BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=64,Bold=1"
+    )
+    return (f"subtitles=filename='{_ass_escape(os.path.abspath(srt))}'"
+            f":fontsdir='{_ass_escape(_FONTS_DIR)}'"
+            f":force_style='{style}'")
+
 
 def audio_duration(path: str) -> float:
     out = subprocess.run(
@@ -54,12 +78,18 @@ def main():
             f.write(f"duration {dur}\n")
         f.write(f"file '{os.path.abspath(slides[-1])}'\n")
 
+    vf = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"
+    subs = build_subs_filter(slides_dir)
+    if subs:
+        vf += "," + subs
+        print("（偵測到 subtitles.srt，燒錄字幕）")
+
     subprocess.run([
         FFMPEG, "-y",
         "-f", "concat", "-safe", "0", "-i", concat_path,
         "-i", audio,
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
-        "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+        "-vf", vf,
         "-c:a", "aac", "-b:a", "192k",
         # -t 硬性把輸出長度鎖在旁白長度（雙保險，徹底杜絕定格尾巴）
         "-t", f"{total:.3f}",

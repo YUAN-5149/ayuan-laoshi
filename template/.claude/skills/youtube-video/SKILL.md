@@ -49,11 +49,20 @@ python pipeline\narrate_slides.py output\<日期>\segments.txt output\<日期>\s
 - 每段各自配音、量測秒數，自動產生**與字卡同步**的 narration.mp3 與 timing.txt（不必手寫 timing）。
 - 男聲 zh-TW-YunJheNeural；edge-tts 抽風會自動重試 10 次、再不行才降級離線語音。
 
+### 5.5 產生字幕（燒進影片，必做）
+```
+python pipeline\make_subtitles.py output\<日期>\segments.txt output\<日期>\slides
+```
+- 讀 segments.txt + slides\timing.txt，自動切短句、依字數分配時間，輸出 `slides\subtitles.srt`。
+- 會自動把 TTS 拆開的縮寫還原（「L L M」→「LLM」），字幕上不會出現奇怪空格。
+- 一定要在第 5 步（narrate_slides 產生 timing.txt）之後、第 6 步合成影片之前跑。
+
 ### 6. 合成影片
 ```
 python pipeline\make_video.py output\<日期>\slides output\<日期>\narration.mp3 output\<日期>\final.mp4
 ```
 - 確認 final.mp4 存在且大小 > 100KB。
+- **若 slides\ 內有 subtitles.srt，make_video 會自動用品牌字型把字幕燒進影片**（不必另外下參數）。
 
 ### 7. 做縮圖（手繪風，依主題挑姿勢）
 ```
