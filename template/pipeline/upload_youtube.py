@@ -12,6 +12,7 @@
     python upload_youtube.py video.mp4 "影片標題" "影片描述" "tag1,tag2"
 """
 import os
+import re
 import sys
 
 from google.auth.transport.requests import Request
@@ -41,10 +42,30 @@ def get_credentials():
     return creds
 
 
+SIGNATURE = "本頻道由 AI Agent 自主經營"
+BASE_TAGS = ["AI", "人工智慧", "科普"]
+
+
+def build_metadata(title, desc, raw_tags):
+    """整理描述與標籤：補署名、把描述裡的 hashtag 併進 tags、去重、保底通用標籤。"""
+    if SIGNATURE not in desc:
+        desc = desc.rstrip() + "\n\n" + SIGNATURE
+    # 描述裡的 #hashtag → 也當成 tag（去掉 #）
+    hash_tags = [h.lstrip("#") for h in re.findall(r"#(\w+)", desc)]
+    tags, seen = [], set()
+    for t in [*raw_tags, *hash_tags, *BASE_TAGS]:
+        t = t.strip()
+        key = t.lower()
+        if t and key not in seen:
+            seen.add(key); tags.append(t)
+    return desc, tags[:30]   # YouTube tags 上限約 500 字元，取前 30 個保險
+
+
 def main():
     video, title, desc = sys.argv[1], sys.argv[2], sys.argv[3]
-    tags = sys.argv[4].split(",") if len(sys.argv) > 4 else []
+    raw_tags = sys.argv[4].split(",") if len(sys.argv) > 4 else []
     thumbnail = sys.argv[5] if len(sys.argv) > 5 else ""
+    desc, tags = build_metadata(title, desc, raw_tags)
 
     yt = build("youtube", "v3", credentials=get_credentials())
     body = {
