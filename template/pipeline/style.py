@@ -197,6 +197,12 @@ def title_tokens(title, emphasis=""):
         if emphasis and title.startswith(emphasis, i):
             toks.append((emphasis, i)); i += len(emphasis); continue
         ch = title[i]
+        # 連續的英數字（含 - '）視為一個整塊，避免 "Embedding" 被斷成 "Embedd/ing"
+        if ch.isascii() and ch.isalnum():
+            j = i
+            while j < n and title[j].isascii() and (title[j].isalnum() or title[j] in "-'"):
+                j += 1
+            toks.append((title[i:j], i)); i = j; continue
         if ch == " ":
             toks.append((" ", i))
         elif ch == "\n":

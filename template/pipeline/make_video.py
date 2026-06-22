@@ -18,6 +18,10 @@ _FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
                           "assets", "fonts")
 SUB_FONT = "jf-openhuninn-2.1"   # assets/fonts/openhuninn.ttf 的字型家族名
 
+# 直式（Shorts 9:16）為預設；VIDEO_VERTICAL=0 可切回橫式 16:9。
+VERTICAL = os.environ.get("VIDEO_VERTICAL", "1") != "0"
+OUT_W, OUT_H = (1080, 1920) if VERTICAL else (1920, 1080)
+
 
 def _ass_escape(path: str) -> str:
     """把 Windows 路徑轉成 ffmpeg subtitles filter 吃得下的字串（/ 取代 \\、跳脫冒號）。"""
@@ -29,10 +33,12 @@ def build_subs_filter(slides_dir: str):
     srt = os.path.join(slides_dir, "subtitles.srt")
     if not os.path.exists(srt):
         return None
+    # 直式要避開 Shorts 底部 UI（標題/帳號/進度條），字幕往上抬、字級略調。
+    fontsize, marginv = (13, 80) if VERTICAL else (20, 64)
     style = (
-        f"FontName={SUB_FONT},Fontsize=20,"
+        f"FontName={SUB_FONT},Fontsize={fontsize},"
         "PrimaryColour=&H00FFFFFF,OutlineColour=&H00282C2C,BackColour=&H64000000,"
-        "BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=64,Bold=1"
+        f"BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV={marginv},Bold=1"
     )
     return (f"subtitles=filename='{_ass_escape(os.path.abspath(srt))}'"
             f":fontsdir='{_ass_escape(_FONTS_DIR)}'"
@@ -78,7 +84,8 @@ def main():
             f.write(f"duration {dur}\n")
         f.write(f"file '{os.path.abspath(slides[-1])}'\n")
 
-    vf = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"
+    vf = (f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=decrease,"
+          f"pad={OUT_W}:{OUT_H}:(ow-iw)/2:(oh-ih)/2")
     subs = build_subs_filter(slides_dir)
     if subs:
         vf += "," + subs
