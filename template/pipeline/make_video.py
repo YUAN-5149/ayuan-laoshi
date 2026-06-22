@@ -76,29 +76,47 @@ def main():
     scale = total / sum(durations)
     durations = [d * scale for d in durations]
 
-    # 用 concat demuxer 串接靜態圖（最後一張重複一次，讓末張撐到音檔結束）
-    concat_path = os.path.join(slides_dir, "_concat.txt")
-    with open(concat_path, "w", encoding="utf-8") as f:
-        for img, dur in zip(slides, durations):
-            f.write(f"file '{os.path.abspath(img)}'\n")
-            f.write(f"duration {dur}\n")
-        f.write(f"file '{os.path.abspath(slides[-1])}'\n")
-
-    vf = (f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=decrease,"
-          f"pad={OUT_W}:{OUT_H}:(ow-iw)/2:(oh-ih)/2")
+    fps = 30
     subs = build_subs_filter(slides_dir)
+
+    # 動態（Ken Burns）：每張圖緩慢推近、交替錨點，把靜態 PPT 變成會動的影片。
+    # 用「單張靜圖 + zoompan d=幀數」的可靠做法（不用 -loop，避免倍幀）。
+    inputs = []
+    for img in slides:
+        inputs += ["-i", os.path.abspath(img)]
+    inputs += ["-i", os.path.abspath(audio)]
+    audio_idx = len(slides)
+
+    anchors = [
+        ("iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),  # 置中推近
+        ("0", "0"),                                  # 往左上漂
+        ("iw-iw/zoom", "ih-ih/zoom"),                # 往右下漂
+    ]
+    parts = []
+    for i, dur in enumerate(durations):
+        dframes = max(1, round(dur * fps))
+        ax, ay = anchors[i % len(anchors)]
+        parts.append(
+            f"[{i}:v]scale={OUT_W * 2}:{OUT_H * 2},"
+            f"zoompan=z='min(zoom+0.0007,1.12)':d={dframes}:x='{ax}':y='{ay}':"
+            f"s={OUT_W}x{OUT_H}:fps={fps},setsar=1[v{i}]"
+        )
+    parts.append("".join(f"[v{i}]" for i in range(len(slides)))
+                 + f"concat=n={len(slides)}:v=1:a=0[vc]")
     if subs:
-        vf += "," + subs
+        parts.append(f"[vc]{subs}[vout]")
+        vmap = "[vout]"
         print("（偵測到 subtitles.srt，燒錄字幕）")
+    else:
+        vmap = "[vc]"
 
     subprocess.run([
-        FFMPEG, "-y",
-        "-f", "concat", "-safe", "0", "-i", concat_path,
-        "-i", audio,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
-        "-vf", vf,
+        FFMPEG, "-y", *inputs,
+        "-filter_complex", ";".join(parts),
+        "-map", vmap, "-map", f"{audio_idx}:a",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps),
         "-c:a", "aac", "-b:a", "192k",
-        # -t 硬性把輸出長度鎖在旁白長度（雙保險，徹底杜絕定格尾巴）
+        # -t 鎖在旁白長度（雙保險，杜絕尾巴定格）
         "-t", f"{total:.3f}",
         "-shortest", out_path,
     ], check=True)
