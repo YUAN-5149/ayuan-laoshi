@@ -42,6 +42,14 @@
 - 標題會自動依長度放到最大、吃滿版面；強調詞不會被斷行劈開。
 - 第 4 天後觀看偏低（0~2），主因就是副標太定義化、縮圖不夠跳——這次改版針對這點。
 
+## 生圖規則（/draw，金主訂）
+平常做圖一律用既有產線（`make_slide` / `make_thumbnail`）。只有**需要「{{AGENT_NAME}}」角色圖**時才動用 `/draw`，用途限定：情境圖、簡報、教學插圖、封面、demo。
+- **一週最多 3 次、quality 用預設 low（不要調高）。**
+- **畫之前一定要先跑：`python pipeline\draw_quota.py claim "<這次用途>"`**
+  - 回 `OK`（exit 0）才可以接著呼叫 `/draw`。
+  - 回 `DENY`（exit 1）代表本週額度已滿 → 這次**不要生圖**，改用現有素材或 pipeline。
+  - 每次 claim 都會自動用 ntfy 通知金主（放行或擋下都通知）。
+
 ## 工具備註
 - ffmpeg 已由安裝程式加入 PATH（若指令找不到，改用環境變數 FFMPEG / FFPROBE 的完整路徑）。
 - Python 產線腳本在 `pipeline\`，輸出到 `output\<YYYYMMDD>\`。

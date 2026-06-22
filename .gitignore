@@ -4,6 +4,7 @@
 **/token_analytics.json
 **/token_manage.json
 **/ntfy_topic.txt
+**/draw_log.json
 
 # 雜項
 *.log
