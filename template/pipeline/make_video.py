@@ -45,6 +45,20 @@ def build_subs_filter(slides_dir: str):
             f":force_style='{style}'")
 
 
+def find_bgm():
+    """找背景配樂：環境變數 AYUAN_BGM 優先，否則 assets/music/bg.*。沒有就回 None。"""
+    env = os.environ.get("AYUAN_BGM")
+    if env and os.path.exists(env):
+        return env
+    mdir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "assets", "music")
+    for name in ("bg.mp3", "bg.m4a", "bg.wav", "bg.ogg"):
+        p = os.path.join(mdir, name)
+        if os.path.exists(p):
+            return p
+    return None
+
+
 def audio_duration(path: str) -> float:
     out = subprocess.run(
         [FFPROBE, "-v", "error", "-show_entries", "format=duration",
@@ -110,10 +124,26 @@ def main():
     else:
         vmap = "[vc]"
 
+    # 背景配樂（選填）：偵測到就低音量墊在旁白下、結尾淡出。
+    bgm = find_bgm()
+    if bgm:
+        vol = os.environ.get("AYUAN_BGM_VOLUME", "0.12")
+        inputs += ["-stream_loop", "-1", "-i", os.path.abspath(bgm)]
+        fade_st = max(0.0, total - 2.0)
+        parts.append(
+            f"[{audio_idx}:a]volume=1.0[an];"
+            f"[{audio_idx + 1}:a]volume={vol},afade=t=out:st={fade_st:.2f}:d=2[am];"
+            f"[an][am]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]"
+        )
+        amap = "[aout]"
+        print(f"（偵測到背景配樂 {os.path.basename(bgm)}，音量 {vol}）")
+    else:
+        amap = f"{audio_idx}:a"
+
     subprocess.run([
         FFMPEG, "-y", *inputs,
         "-filter_complex", ";".join(parts),
-        "-map", vmap, "-map", f"{audio_idx}:a",
+        "-map", vmap, "-map", amap,
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps),
         "-c:a", "aac", "-b:a", "192k",
         # -t 鎖在旁白長度（雙保險，杜絕尾巴定格）
