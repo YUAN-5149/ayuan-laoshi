@@ -2,6 +2,7 @@
 **/client_secret.json
 **/token.json
 **/token_analytics.json
+**/token_manage.json
 **/ntfy_topic.txt
 
 # 雜項
