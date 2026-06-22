@@ -76,7 +76,7 @@ if (-not (Test-Path "pipeline\client_secret.json")) {
 # 若外部已手動指定 $env:YT_PRIVACY（例如人工測試），尊重之、不覆蓋。
 if (-not $env:YT_PRIVACY) {
     if ($env:YT_GO_PUBLIC_DATE) { $GoPublicDate = [datetime]$env:YT_GO_PUBLIC_DATE }
-    else { $GoPublicDate = [datetime]'2026-06-29' }
+    else { $GoPublicDate = [datetime]'2026-06-22' }   # 2026-06-22 起立即公開（攻 Shorts 需公開才有推薦流）
     if ((Get-Date).Date -lt $GoPublicDate.Date) { $env:YT_PRIVACY = 'unlisted' }
     else { $env:YT_PRIVACY = 'public' }
     "PRIVACY=$($env:YT_PRIVACY)（公開起始日 $($GoPublicDate.ToString('yyyy-MM-dd'))）" | Add-Content $log
