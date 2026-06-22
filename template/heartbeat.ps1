@@ -42,6 +42,13 @@ function Send-Alert {
     }
 }
 
+# 外部 dead-man（選用）：成功就 ping，沒 ping 外部服務(如 healthchecks.io)就會提醒你。
+# 即使電腦整天關機也收得到斷更通知。設環境變數 AYUAN_HEALTHCHECK_URL 即啟用，未設則略過。
+function Ping-Health([string]$suffix = "") {
+    if (-not $env:AYUAN_HEALTHCHECK_URL) { return }
+    try { Invoke-RestMethod -Uri ($env:AYUAN_HEALTHCHECK_URL + $suffix) -Method Get -TimeoutSec 10 | Out-Null } catch {}
+}
+
 # 先從頻道 RSS 同步記憶：換電腦後 MEMORY.md 會空白，這步把已發布影片補回，避免撞題。
 # 失敗（沒網路等）腳本內部自會 exit 0，不擋心跳；接著的 dedup 也才會讀到最新記憶。
 "=== 同步記憶 (sync_memory) @ $(Get-Date -Format o) ===" | Add-Content $log
@@ -58,6 +65,7 @@ function Test-PublishedToday {
 # 若今天「已經」發過片，直接結束，避免重複工作。
 if (Test-PublishedToday) {
     "SKIP: 今天 ($today) 已有發布紀錄，無需再跑。" | Add-Content $log
+    Ping-Health
     exit 0
 }
 
@@ -106,6 +114,7 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
 
     if (Test-PublishedToday) {
         "RESULT=SUCCESS (偵測到今日 $today 發布紀錄)" | Add-Content $log
+        Ping-Health
         exit 0
     }
     "RESULT=NO_VIDEO_YET (第 $i 次嘗試未產出今日影片)" | Add-Content $log
@@ -115,4 +124,5 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
 # 連續失敗：標記 FAILED 並發出告警（桌面通知 + 手機推播），方便人工介入。
 "RESULT=FAILED 連續 $maxAttempts 次未產出今日 ($today) 影片，請人工檢查 CLI 登入與用量。" | Add-Content $log
 Send-Alert "阿遠老師 發片失敗" "今日 ($today) 自動發片失敗，連續 $maxAttempts 次未產出影片，請手動檢查（claude 登入/用量）。"
+Ping-Health "/fail"
 exit 1
