@@ -84,11 +84,14 @@ def main():
         lines.append(f"| {int(views)} | {retpct:.0f}% | {avgdur:.0f}s | {int(subs)} | "
                      f"https://youtu.be/{vid} |")
 
-    # 一句洞察：留存最高的那支
+    # 一句洞察：以「有意義樣本」(觀看≥3) 中觀看最高者當標竿。
+    # 低觀看的高留存（如 1 觀看 99%）樣本太小、是雜訊，不拿來下結論。
     if rows:
-        best = max(rows, key=lambda r: r[1])   # 依 averageViewPercentage
-        lines += ["", f"**留存最高**：{best[1]:.0f}%（https://youtu.be/{best[0]} ）"
-                  "——這支的選題/比喻/節奏值得複製。"]
+        meaningful = [r for r in rows if r[1] >= 3] or rows
+        best = max(meaningful, key=lambda r: r[1])   # r[1]=views, r[2]=留存%
+        lines += ["", f"**目前標竿**：{int(best[1])} 觀看、留存 {best[2]:.0f}%"
+                  f"（https://youtu.be/{best[0]} ）——這支的選題／比喻／節奏最值得複製。"
+                  "（注意：個位數觀看的高留存樣本太小，先別當真。）"]
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
