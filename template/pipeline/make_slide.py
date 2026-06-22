@@ -6,6 +6,7 @@
 [mascot] 選填：素材 png 路徑，或 auto:主題關鍵字。給了就讓吉祥物在右下角入鏡。
 相容舊版三參數呼叫（無吉祥物）。
 """
+import os
 import random
 import sys
 from PIL import Image, ImageDraw
@@ -76,6 +77,7 @@ def main():
                 y += 92
             y += 22
 
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     img.convert("RGB").save(out_path)
     print(f"OK: {out_path}")
 
