@@ -82,13 +82,26 @@ if (-not $env:YT_PRIVACY) {
     "PRIVACY=$($env:YT_PRIVACY)（公開起始日 $($GoPublicDate.ToString('yyyy-MM-dd'))）" | Add-Content $log
 }
 
+# ---- 混合格式策略 ----
+# 平日出直式 Shorts；指定的「長片日」(預設週日 Sunday) 出橫式 16:9 深入長片。
+# 想改長片日：設環境變數 AYUAN_LONG_DAY（英文星期，如 Saturday）；想全 Shorts 設成不存在的值（如 None）。
+$LongDay = if ($env:AYUAN_LONG_DAY) { $env:AYUAN_LONG_DAY } else { 'Sunday' }
+if ((Get-Date).DayOfWeek.ToString() -eq $LongDay) {
+    $env:VIDEO_VERTICAL = '0'
+    $FormatHint = '長片（橫式 16:9、深入講解、約 2~3 分鐘、字卡 6~9 張）'
+} else {
+    $env:VIDEO_VERTICAL = '1'
+    $FormatHint = 'Shorts（直式 9:16、精簡明快、60~90 秒、字卡 4~6 張）'
+}
+"FORMAT=$(if ($env:VIDEO_VERTICAL -eq '0') {'LONG 16:9'} else {'SHORTS 9:16'})（長片日=$LongDay）" | Add-Content $log
+
 $maxAttempts = 2
 for ($i = 1; $i -le $maxAttempts; $i++) {
     "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o) ===" | Add-Content $log
 
     # --dangerously-skip-permissions: 無人值守必須跳過權限確認。
     # 風險已透過限縮工作目錄與 SOP 控制，勿在其他目錄使用此旗標。
-    claude -p "心跳：請讀取 HEARTBEAT.md，依照清單檢查並執行今天的工作。" --dangerously-skip-permissions *>> $log
+    claude -p "心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。" --dangerously-skip-permissions *>> $log
     "exit=$LASTEXITCODE" | Add-Content $log
 
     if (Test-PublishedToday) {

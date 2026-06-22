@@ -7,9 +7,12 @@ description: 製作並上傳一支 YouTube 知識短片的完整 SOP。當需要
 
 工作目錄＝Agent 根目錄（這個 skill 上面三層的目錄，內含 CLAUDE.md / MEMORY.md / pipeline/）。以下所有相對路徑都以此為準。被心跳呼叫時，`heartbeat.ps1` 已經 `Set-Location $PSScriptRoot` 設好 cwd，不要自己再 cd 到別處。
 
-## 格式：直式 Shorts（重要）
-本頻道走 **YouTube Shorts**：影片為**直式 9:16（1080×1920）**、長度 **≤3 分鐘**（目標 60~90 秒）。
-產線預設就是直式（`make_slide` / `make_video` 讀環境變數 `VIDEO_VERTICAL`，預設開）——照下面步驟跑即可，不用特別下參數。字卡內文別塞太多（直式窄，每點儘量短）。
+## 格式：平日 Shorts、長片日橫式（看心跳指示）
+本頻道以 **YouTube Shorts（直式 9:16, 1080×1920）** 為主，搭配偶爾的橫式長片（預設週日）。
+**心跳訊息開頭會告訴你今天的格式**；`make_slide` / `make_video` 已由環境變數 `VIDEO_VERTICAL` 自動切換版型（你不用下參數），但**腳本長度與字卡張數要配合格式**：
+- **Shorts**：精簡明快 60~90 秒、字卡 4~6 張、每點要短、節奏快、鉤子更要狠。
+- **長片**：深入 2~3 分鐘、字卡 6~9 張，可多舉例、多延伸。
+- 手動測試想指定格式：跑前設 `$env:VIDEO_VERTICAL='1'`（直式）或 `'0'`（橫式）。
 
 ## 流程
 
