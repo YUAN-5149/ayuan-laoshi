@@ -6,6 +6,42 @@ New-Item -ItemType Directory -Force "logs" | Out-Null
 $today = Get-Date -Format 'yyyy-MM-dd'
 $log = "logs\heartbeat-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 
+# 失敗告警：本機桌面通知 + 遠端推播（ntfy.sh，手機/桌面 App 收得到）。
+# 推播主題來源優先序：環境變數 AYUAN_NTFY_TOPIC > pipeline\ntfy_topic.txt（本機、不進 git）。
+# 沒設主題時只跳桌面通知、不推播（不報錯）。手機端裝 ntfy App 訂閱同一主題即可收。
+function Send-Alert {
+    param([string]$Title, [string]$Message)
+    # 1) 本機桌面通知
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $n = New-Object System.Windows.Forms.NotifyIcon
+        $n.Icon = [System.Drawing.SystemIcons]::Warning
+        $n.Visible = $true
+        $n.ShowBalloonTip(15000, $Title, $Message, [System.Windows.Forms.ToolTipIcon]::Warning)
+        Start-Sleep -Seconds 12
+        $n.Dispose()
+    } catch {}
+    # 2) 遠端推播（ntfy.sh）
+    $topic = $env:AYUAN_NTFY_TOPIC
+    if (-not $topic -and (Test-Path "pipeline\ntfy_topic.txt")) {
+        $topic = (Get-Content -Raw "pipeline\ntfy_topic.txt").Trim()
+    }
+    if ($topic) {
+        try {
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes("$Title`n$Message")
+            Invoke-RestMethod -Uri "https://ntfy.sh/$topic" -Method Post -Body $bytes `
+                -ContentType "text/plain; charset=utf-8" `
+                -Headers @{ Title = "AYuan Laoshi Alert"; Priority = "high"; Tags = "warning,rotating_light" } | Out-Null
+            "ALERT pushed to ntfy topic: $topic" | Add-Content $log
+        } catch {
+            "ALERT ntfy push failed: $($_.Exception.Message)" | Add-Content $log
+        }
+    } else {
+        "ALERT no ntfy topic set（僅桌面通知）。設 AYUAN_NTFY_TOPIC 或建 pipeline\ntfy_topic.txt 可開啟手機推播。" | Add-Content $log
+    }
+}
+
 # 先從頻道 RSS 同步記憶：換電腦後 MEMORY.md 會空白，這步把已發布影片補回，避免撞題。
 # 失敗（沒網路等）腳本內部自會 exit 0，不擋心跳；接著的 dedup 也才會讀到最新記憶。
 "=== 同步記憶 (sync_memory) @ $(Get-Date -Format o) ===" | Add-Content $log
@@ -28,16 +64,7 @@ if (Test-PublishedToday) {
 # 預檢 OAuth：缺 client_secret.json 不開 Claude（省 quota；上傳一定會敗，做白工沒意義）。
 if (-not (Test-Path "pipeline\client_secret.json")) {
     "SKIP: 缺 pipeline\client_secret.json，請依 README 步驟 2 完成 YouTube OAuth 設定。" | Add-Content $log
-    try {
-        Add-Type -AssemblyName System.Windows.Forms
-        Add-Type -AssemblyName System.Drawing
-        $n = New-Object System.Windows.Forms.NotifyIcon
-        $n.Icon = [System.Drawing.SystemIcons]::Warning
-        $n.Visible = $true
-        $n.ShowBalloonTip(15000, "阿遠老師 缺 OAuth 憑證", "pipeline\client_secret.json 不存在，請完成 YouTube OAuth 設定（README 步驟 2）。", [System.Windows.Forms.ToolTipIcon]::Warning)
-        Start-Sleep -Seconds 12
-        $n.Dispose()
-    } catch {}
+    Send-Alert "阿遠老師 缺 OAuth 憑證" "pipeline\client_secret.json 不存在，請完成 YouTube OAuth 設定（README 步驟 2）。"
     exit 0
 }
 
@@ -72,16 +99,7 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     if ($i -lt $maxAttempts) { Start-Sleep -Seconds 90 }
 }
 
-# 連續失敗：標記 FAILED 並彈出桌面通知，方便人工介入。
+# 連續失敗：標記 FAILED 並發出告警（桌面通知 + 手機推播），方便人工介入。
 "RESULT=FAILED 連續 $maxAttempts 次未產出今日 ($today) 影片，請人工檢查 CLI 登入與用量。" | Add-Content $log
-try {
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -AssemblyName System.Drawing
-    $n = New-Object System.Windows.Forms.NotifyIcon
-    $n.Icon = [System.Drawing.SystemIcons]::Warning
-    $n.Visible = $true
-    $n.ShowBalloonTip(15000, "阿遠老師 發片失敗", "今日 ($today) 自動發片失敗，請手動檢查（claude 登入/用量）。", [System.Windows.Forms.ToolTipIcon]::Warning)
-    Start-Sleep -Seconds 12
-    $n.Dispose()
-} catch {}
+Send-Alert "阿遠老師 發片失敗" "今日 ($today) 自動發片失敗，連續 $maxAttempts 次未產出影片，請手動檢查（claude 登入/用量）。"
 exit 1
