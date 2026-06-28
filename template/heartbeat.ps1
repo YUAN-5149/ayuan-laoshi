@@ -104,13 +104,39 @@ if ((Get-Date).DayOfWeek.ToString() -eq $LongDay) {
 "FORMAT=$(if ($env:VIDEO_VERTICAL -eq '0') {'LONG 16:9'} else {'SHORTS 9:16'})（長片日=$LongDay）" | Add-Content $log
 
 $maxAttempts = 2
+# claude 子程序逾時上限：防止 CLI 卡死導致整個心跳無限阻塞——「卡住」是沒產出也沒告警的元兇
+# （曾在週日長片日因 claude -p 無 timeout 卡死，整天沒發片也沒推播）。
+# 可用環境變數 AYUAN_ATTEMPT_TIMEOUT_SEC 覆蓋，預設 1500 秒（25 分鐘，含產線+上傳綽綽有餘）。
+$attemptTimeoutSec = if ($env:AYUAN_ATTEMPT_TIMEOUT_SEC) { [int]$env:AYUAN_ATTEMPT_TIMEOUT_SEC } else { 1500 }
+# 解析 claude 執行檔：npm 安裝時是 claude.ps1（外部腳本），需用 powershell -File 啟動才能 PassThru 控制與逾時強殺。
+$claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
+$prompt = "心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
+
 for ($i = 1; $i -le $maxAttempts; $i++) {
-    "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o) ===" | Add-Content $log
+    "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o)（逾時上限 ${attemptTimeoutSec}s）===" | Add-Content $log
 
     # --dangerously-skip-permissions: 無人值守必須跳過權限確認。
     # 風險已透過限縮工作目錄與 SOP 控制，勿在其他目錄使用此旗標。
-    claude -p "心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。" --dangerously-skip-permissions *>> $log
-    "exit=$LASTEXITCODE" | Add-Content $log
+    $outTmp = "logs\attempt-$i.out"; $errTmp = "logs\attempt-$i.err"
+    if ($claudeCmd -and $claudeCmd.CommandType -eq 'ExternalScript') {
+        $startArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $claudeCmd.Source, '-p', $prompt, '--dangerously-skip-permissions')
+        $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $startArgs -NoNewWindow -PassThru -RedirectStandardOutput $outTmp -RedirectStandardError $errTmp
+    } else {
+        $exe = if ($claudeCmd) { $claudeCmd.Source } else { 'claude' }
+        $proc = Start-Process -FilePath $exe -ArgumentList @('-p', $prompt, '--dangerously-skip-permissions') -NoNewWindow -PassThru -RedirectStandardOutput $outTmp -RedirectStandardError $errTmp
+    }
+
+    $proc | Wait-Process -Timeout $attemptTimeoutSec -ErrorAction SilentlyContinue
+    if (-not $proc.HasExited) {
+        # 卡死：強制終止整個程序樹（含 node 子程序），讓本次視為失敗、進入重試/告警，而非無限阻塞。
+        try { & taskkill /T /F /PID $proc.Id 2>&1 | Out-Null } catch {}
+        try { $proc | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+        "TIMEOUT: claude 子程序超過 ${attemptTimeoutSec}s 未結束，已強制終止（第 $i 次）。" | Add-Content $log
+    } else {
+        "exit=$($proc.ExitCode)" | Add-Content $log
+    }
+    # 把子程序輸出併回主 log，再清掉暫存。
+    foreach ($f in @($outTmp, $errTmp)) { if (Test-Path $f) { Get-Content $f -Raw -ErrorAction SilentlyContinue | Add-Content $log; Remove-Item $f -Force -ErrorAction SilentlyContinue } }
 
     if (Test-PublishedToday) {
         "RESULT=SUCCESS (偵測到今日 $today 發布紀錄)" | Add-Content $log
