@@ -76,6 +76,17 @@ if (-not (Test-Path "pipeline\client_secret.json")) {
     exit 0
 }
 
+# 預檢上傳 token：過期且 refresh 失敗時，與其產一支無法上傳的片（浪費整輪產線+Claude 用量），
+# 不如直接告警請人工重新授權。（曾因 token 7 天過期、refresh 失敗而整支白做。）
+# 治本：把 Google OAuth 同意畫面從 Testing 發布成 Production，refresh token 才不會每 7 天過期。
+python "pipeline\check_upload_token.py" *>> $log
+if ($LASTEXITCODE -ne 0) {
+    "SKIP: 上傳 token 失效（check_upload_token 回 $LASTEXITCODE），需人工重新授權，今天不產片。" | Add-Content $log
+    Send-Alert "阿遠老師 需重新授權" "YouTube 上傳 token 失效（多半 OAuth 仍在 Testing、refresh token 每 7 天過期）。請手動跑一次 upload 完成瀏覽器授權，或把 OAuth App 發布成 Production 根治。"
+    Ping-Health "/fail"
+    exit 0
+}
+
 # ---- 漸進公開策略 ----
 # 觀察期內發的影片設 unlisted（不公開、有連結才看得到），方便先看品質；
 # 到「公開起始日」當天起自動改成 public。env 會傳給 claude 子程序與 upload_youtube.py。
