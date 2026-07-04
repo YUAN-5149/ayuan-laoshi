@@ -5,6 +5,10 @@
 **/token_manage.json
 **/ntfy_topic.txt
 **/draw_log.json
+**/token.json.bak-*
+
+# 執行期狀態（不進版控）
+**/mascot_history.json
 
 # 雜項
 *.log

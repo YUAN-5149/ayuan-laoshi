@@ -116,6 +116,17 @@ Register-ScheduledTask -TaskName "AI-YouTuber-Heartbeat" -Action $action -Trigge
 Disable-ScheduledTask -TaskName "AI-YouTuber-Heartbeat" | Out-Null
 Ok "已註冊（停用中，完成設定後再開啟）"
 
+# ---------- 6b. 註冊每週復盤排程（週六，先停用） ----------
+Step "註冊工作排程器: AI-YouTuber-Weekly-Review（每週六 20:00，先停用）"
+$wrAction   = New-ScheduledTaskAction -Execute "powershell.exe" `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$InstallDir\weekly_review.ps1`""
+$wrTrigger  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At "20:00"
+$wrSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+Register-ScheduledTask -TaskName "AI-YouTuber-Weekly-Review" -Action $wrAction -Trigger $wrTrigger `
+    -Settings $wrSettings -Description "每週六用數據復盤、修正選題方向（只分析不發片）" -Force | Out-Null
+Disable-ScheduledTask -TaskName "AI-YouTuber-Weekly-Review" | Out-Null
+Ok "已註冊（停用中）"
+
 # ---------- 完成 ----------
 Write-Host @"
 
@@ -131,8 +142,9 @@ Write-Host @"
       下載桌面版 OAuth 憑證存成 pipeline\client_secret.json，
       跑一次測試上傳完成瀏覽器授權。
 
- 3. 開啟每日自動發片:
+ 3. 開啟自動排程（每日發片 + 每週六復盤）:
       Enable-ScheduledTask -TaskName "AI-YouTuber-Heartbeat"
+      Enable-ScheduledTask -TaskName "AI-YouTuber-Weekly-Review"
 
  手動測試一次心跳:
       powershell -ExecutionPolicy Bypass -File $InstallDir\heartbeat.ps1

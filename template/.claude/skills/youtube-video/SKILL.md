@@ -42,7 +42,7 @@ description: 製作並上傳一支 YouTube 知識短片的完整 SOP。當需要
 python pipeline\mascot.py "今天的主題關鍵字"   # 印出最合適的素材路徑
 python pipeline\mascot.py --list              # 看所有可用姿勢
 ```
-- 投影片與縮圖都用 `auto:<主題關鍵字>` 讓系統自動挑同一隻姿勢，保持一致。
+- 投影片與縮圖都用 `auto:<主題關鍵字>` 即可。**`mascot.py` 現在會「每天自動換一張」姿勢**（同一天所有字卡+縮圖用同一張保持一致，跨天保證不同、自動輪替全部姿勢）讓觀眾覺得新穎——你不必為了換姿勢刻意改關鍵字，正常帶主題詞就好。
 - **想用 `/draw` 生一張全新的阿遠角色圖（情境/簡報/教學插圖/封面/demo）才需要額外步驟**：先跑 `python pipeline\draw_quota.py claim "<用途>"`，回 OK 才可呼叫 `/draw`（quality 預設 low）；回 DENY 代表本週 3 次額度已滿、這次別生圖。詳見 CLAUDE.md「生圖規則」。一般發片用既有素材＋pipeline 即可，不必動用 /draw。
 
 ### 4. 做投影片（4~6 張字卡，手繪風）
