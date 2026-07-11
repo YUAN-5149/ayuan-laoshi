@@ -43,6 +43,16 @@ def main():
             print("OK: 上傳 token 已過期但成功 refresh 並寫回。")
             sys.exit(0)
         except Exception as e:
+            # 網路問題 ≠ token 失效：清晨機器剛喚醒 Wi-Fi 未連上時 DNS 會全掛，
+            # 這種要回 exit 3 讓心跳「等網路重試」，不能誤報 NEED_REAUTH 放棄一整天
+            # （2026-07-11 就因此整天沒發片、連 ntfy 都推不出去）。
+            msg = str(e)
+            net_signs = ("getaddrinfo", "NameResolutionError", "Failed to resolve",
+                         "Max retries exceeded", "Connection", "TransportError",
+                         "timed out", "Temporary failure", "unreachable")
+            if any(s.lower() in msg.lower() for s in net_signs):
+                print(f"NETWORK: refresh 因網路問題失敗（{msg[:200]}），token 本身未必失效，請等網路後重試。")
+                sys.exit(3)
             print(f"NEED_REAUTH: refresh 失敗（{e}）。多半是 OAuth 同意畫面仍在 Testing 狀態、"
                   f"refresh token 每 7 天過期——治本請把 App 發布成 Production。")
             sys.exit(2)

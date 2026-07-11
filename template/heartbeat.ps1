@@ -49,6 +49,30 @@ function Ping-Health([string]$suffix = "") {
     try { Invoke-RestMethod -Uri ($env:AYUAN_HEALTHCHECK_URL + $suffix) -Method Get -TimeoutSec 10 | Out-Null } catch {}
 }
 
+# 等網路就緒：排程喚醒的瞬間 Wi-Fi 常還沒連上，DNS 全掛會讓 sync/token 預檢/ntfy 全部誤判
+# （曾因此整天沒發片、告警也推不出去）。最多等 15 分鐘，每 30 秒試一次 DNS。
+function Wait-Network {
+    param([int]$MaxWaitSec = 900, [int]$IntervalSec = 30)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($sw.Elapsed.TotalSeconds -lt $MaxWaitSec) {
+        try {
+            [System.Net.Dns]::GetHostAddresses('oauth2.googleapis.com') | Out-Null
+            "NETWORK OK @ $(Get-Date -Format o)（等了 $([int]$sw.Elapsed.TotalSeconds)s）" | Add-Content $log
+            return $true
+        } catch {
+            Start-Sleep -Seconds $IntervalSec
+        }
+    }
+    "NETWORK TIMEOUT: 等了 $MaxWaitSec 秒仍無法解析 DNS。" | Add-Content $log
+    return $false
+}
+if (-not (Wait-Network)) {
+    # 沒網路什麼都做不了；桌面通知還是發得出（ntfy 需要網路、大概率也失敗，Send-Alert 内部會容錯）。
+    Send-Alert "阿遠老師 無網路" "心跳啟動後等了 15 分鐘仍無網路，今天發片流程未執行，請檢查連線後手動 Start-ScheduledTask AI-YouTuber-Heartbeat。"
+    Ping-Health "/fail"
+    exit 1
+}
+
 # 先從頻道 RSS 同步記憶：換電腦後 MEMORY.md 會空白，這步把已發布影片補回，避免撞題。
 # 失敗（沒網路等）腳本內部自會 exit 0，不擋心跳；接著的 dedup 也才會讀到最新記憶。
 "=== 同步記憶 (sync_memory) @ $(Get-Date -Format o) ===" | Add-Content $log
@@ -80,8 +104,21 @@ if (-not (Test-Path "pipeline\client_secret.json")) {
 # 不如直接告警請人工重新授權。（曾因 token 7 天過期、refresh 失敗而整支白做。）
 # 治本：把 Google OAuth 同意畫面從 Testing 發布成 Production，refresh token 才不會每 7 天過期。
 python "pipeline\check_upload_token.py" *>> $log
-if ($LASTEXITCODE -ne 0) {
-    "SKIP: 上傳 token 失效（check_upload_token 回 $LASTEXITCODE），需人工重新授權，今天不產片。" | Add-Content $log
+$tokenCheck = $LASTEXITCODE
+if ($tokenCheck -eq 3) {
+    # 網路型失敗（DNS/連線）≠ token 失效：等 60 秒再試一次；再不行就照常產片
+    # （產線要跑好幾分鐘，屆時網路多半已恢復；上傳真失敗也有 Attempt 重試與告警兜底）。
+    "WARN: token 預檢遇網路問題（exit 3），60 秒後重試一次。" | Add-Content $log
+    Start-Sleep -Seconds 60
+    python "pipeline\check_upload_token.py" *>> $log
+    $tokenCheck = $LASTEXITCODE
+    if ($tokenCheck -eq 3) {
+        "WARN: token 預檢仍是網路問題，照常繼續產片（上傳階段自有重試/告警）。" | Add-Content $log
+        $tokenCheck = 0
+    }
+}
+if ($tokenCheck -ne 0) {
+    "SKIP: 上傳 token 失效（check_upload_token 回 $tokenCheck），需人工重新授權，今天不產片。" | Add-Content $log
     Send-Alert "阿遠老師 需重新授權" "YouTube 上傳 token 失效（多半 OAuth 仍在 Testing、refresh token 每 7 天過期）。請手動跑一次 upload 完成瀏覽器授權，或把 OAuth App 發布成 Production 根治。"
     Ping-Health "/fail"
     exit 0
