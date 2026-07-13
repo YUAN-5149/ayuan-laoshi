@@ -22,7 +22,16 @@ async def tts_edge(text: str, out_path: str):
     # zh-TW 男聲: zh-TW-YunJheNeural, 女聲: zh-TW-HsiaoChenNeural
     voice = os.environ.get("EDGE_TTS_VOICE", "zh-TW-YunJheNeural")
     rate = os.environ.get("EDGE_TTS_RATE", "+8%")
-    parts = [p.strip() for p in re.split(r"(?<=[。！？!?\n])", text) if p.strip()]
+    raw_parts = [p.strip() for p in re.split(r"(?<=[。！？!?\n])", text) if p.strip()]
+    # 引號內的句末標點會切出「』」」這種純標點碎片，edge-tts 對它必回 NoAudioReceived
+    # （2026-07-11 就因『請問你是哪位？』的孤兒『」』重試耗盡、整段降級離線語音）。
+    # 沒有可唸內容（中文/英數）的碎片一律併回前一句。
+    parts = []
+    for p in raw_parts:
+        if re.search(r"[\w一-鿿]", p):
+            parts.append(p)
+        elif parts:
+            parts[-1] += p
     if not parts:
         parts = [text]
 
@@ -33,9 +42,15 @@ async def tts_edge(text: str, out_path: str):
             seg = os.path.join(tmpdir, f"seg_{i:03d}.mp3")
             done, last_err = False, None
             tries = int(os.environ.get("EDGE_TTS_TRIES", "8"))
-            for _ in range(tries):
+            for attempt in range(tries):
                 try:
-                    await edge_tts.Communicate(part, voice, rate=rate).save(seg)
+                    # 2026-07-11 起微軟端點對 rate/prosody 參數回 NoAudioReceived（無 rate 正常）。
+                    # 前 2 次照設定帶 rate（未來端點修好自動恢復 +8% 語速），之後改無 rate 保住品牌人聲。
+                    if attempt < 2 and rate:
+                        comm = edge_tts.Communicate(part, voice, rate=rate)
+                    else:
+                        comm = edge_tts.Communicate(part, voice)
+                    await comm.save(seg)
                     if os.path.exists(seg) and os.path.getsize(seg) > 200:
                         done = True
                         break

@@ -50,9 +50,9 @@ function Ping-Health([string]$suffix = "") {
 }
 
 # 等網路就緒：排程喚醒的瞬間 Wi-Fi 常還沒連上，DNS 全掛會讓 sync/token 預檢/ntfy 全部誤判
-# （曾因此整天沒發片、告警也推不出去）。最多等 15 分鐘，每 30 秒試一次 DNS。
+# （曾因此整天沒發片、告警也推不出去；實測 15 分鐘可能仍不夠 → 預設 30 分）。
 function Wait-Network {
-    param([int]$MaxWaitSec = 900, [int]$IntervalSec = 30)
+    param([int]$MaxWaitSec = 1800, [int]$IntervalSec = 30)
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     while ($sw.Elapsed.TotalSeconds -lt $MaxWaitSec) {
         try {
