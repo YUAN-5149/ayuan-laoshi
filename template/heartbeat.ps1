@@ -45,8 +45,16 @@ function Send-Alert {
 # 外部 dead-man（選用）：成功就 ping，沒 ping 外部服務(如 healthchecks.io)就會提醒你。
 # 即使電腦整天關機也收得到斷更通知。設環境變數 AYUAN_HEALTHCHECK_URL 即啟用，未設則略過。
 function Ping-Health([string]$suffix = "") {
-    if (-not $env:AYUAN_HEALTHCHECK_URL) { return }
-    try { Invoke-RestMethod -Uri ($env:AYUAN_HEALTHCHECK_URL + $suffix) -Method Get -TimeoutSec 10 | Out-Null } catch {}
+    if (-not $env:AYUAN_HEALTHCHECK_URL) {
+        "HEALTHCHECK: 未設 AYUAN_HEALTHCHECK_URL，略過 dead-man 回報。" | Add-Content $log
+        return
+    }
+    try {
+        Invoke-RestMethod -Uri ($env:AYUAN_HEALTHCHECK_URL + $suffix) -Method Get -TimeoutSec 10 | Out-Null
+        "HEALTHCHECK: ping$(if($suffix){$suffix}else{'(存活)'}) OK" | Add-Content $log
+    } catch {
+        "HEALTHCHECK: ping$suffix 失敗（$($_.Exception.Message)）" | Add-Content $log
+    }
 }
 
 # 等網路就緒：排程喚醒的瞬間 Wi-Fi 常還沒連上，DNS 全掛會讓 sync/token 預檢/ntfy 全部誤判
