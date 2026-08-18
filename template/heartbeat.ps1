@@ -159,6 +159,19 @@ if ((Get-Date).DayOfWeek.ToString() -eq $LongDay) {
 }
 "FORMAT=$(if ($env:VIDEO_VERTICAL -eq '0') {'LONG 16:9'} else {'SHORTS 9:16'})（長片日=$LongDay）" | Add-Content $log
 
+# ---- 系列日策略（選用）----
+# 指定星期固定出某個主題系列（例：把考照系列排在週四、週五）。
+# 啟用條件：環境變數 AYUAN_SERIES_DAYS 有值（逗號分隔英文星期，如 "Thursday,Friday"）
+# 且工作區有 SERIES.md（系列規劃書：定位、內容型態、選題順序、已講清單、SEO 規則）。
+# 未設變數或找不到 SERIES.md 就完全不影響原本流程。
+$SeriesDays = if ($env:AYUAN_SERIES_DAYS) { ($env:AYUAN_SERIES_DAYS -split ',') | ForEach-Object { $_.Trim() } } else { @() }
+$IsSeriesDay = ((Get-Date).DayOfWeek.ToString() -in $SeriesDays) -and (Test-Path "SERIES.md")
+if ($IsSeriesDay) {
+    "SERIES=ON（今天 $((Get-Date).DayOfWeek) 是系列日，將依 SERIES.md 選題）" | Add-Content $log
+} elseif ($SeriesDays.Count -gt 0) {
+    "SERIES=off（系列日設定=$($SeriesDays -join '/')，今天不是）" | Add-Content $log
+}
+
 $maxAttempts = 2
 # claude 子程序逾時上限：防止 CLI 卡死導致整個心跳無限阻塞——「卡住」是沒產出也沒告警的元兇
 # （曾在週日長片日因 claude -p 無 timeout 卡死，整天沒發片也沒推播）。
@@ -166,7 +179,8 @@ $maxAttempts = 2
 $attemptTimeoutSec = if ($env:AYUAN_ATTEMPT_TIMEOUT_SEC) { [int]$env:AYUAN_ATTEMPT_TIMEOUT_SEC } else { 1500 }
 # 解析 claude 執行檔：npm 安裝時是 claude.ps1（外部腳本），需用 powershell -File 啟動才能 PassThru 控制與逾時強殺。
 $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
-$prompt = "心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
+$seriesHint = if ($IsSeriesDay) { "【今天是系列日】請務必先讀完工作區的 SERIES.md，今天要出的是該系列的影片——選題、腳本型態、標題與描述的 SEO 規則、播放清單、內容準則全部依 SERIES.md 執行，發完別忘了把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
+$prompt = "心跳：今天影片格式＝$FormatHint。$seriesHint 請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
 
 for ($i = 1; $i -le $maxAttempts; $i++) {
     "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o)（逾時上限 ${attemptTimeoutSec}s）===" | Add-Content $log
