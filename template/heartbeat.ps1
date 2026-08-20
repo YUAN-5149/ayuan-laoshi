@@ -179,8 +179,8 @@ $maxAttempts = 2
 $attemptTimeoutSec = if ($env:AYUAN_ATTEMPT_TIMEOUT_SEC) { [int]$env:AYUAN_ATTEMPT_TIMEOUT_SEC } else { 1500 }
 # 解析 claude 執行檔：npm 安裝時是 claude.ps1（外部腳本），需用 powershell -File 啟動才能 PassThru 控制與逾時強殺。
 $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
-$seriesHint = if ($IsSeriesDay) { "【今天是系列日】請務必先讀完工作區的 SERIES.md，今天要出的是該系列的影片——選題、腳本型態、標題與描述的 SEO 規則、播放清單、內容準則全部依 SERIES.md 執行，發完別忘了把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
-$prompt = "心跳：今天影片格式＝$FormatHint。$seriesHint 請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
+$seriesHint = if ($IsSeriesDay) { "【最優先·今天是系列日】今天出的是 SERIES.md 指定的主題系列，不是一般科普題。動手前務必先完整讀過工作區的 SERIES.md，然後：依它的選題順序與已講清單挑題（**不要用 MEMORY.md 的一般待發題庫**）、照它指定的腳本型態寫、標題與描述套它的 SEO 規則、加它指定的播放清單、遵守它的內容準則；發完把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
+$prompt = "$seriesHint`n心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
 
 for ($i = 1; $i -le $maxAttempts; $i++) {
     "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o)（逾時上限 ${attemptTimeoutSec}s）===" | Add-Content $log
