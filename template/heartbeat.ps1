@@ -132,6 +132,52 @@ if ($tokenCheck -ne 0) {
     exit 0
 }
 
+# ---- Claude CLI 登入到期預檢 ----
+# 為什麼：`claude auth login` 發的 access token 只有約 8 小時（實測 2026-08-27：12:24 登入 → 20:24 到期），
+# 所以隔天 06:00 的無人值守心跳幾乎必定已經過期、Agent 根本啟動不了，只丟一個看不懂的 401。
+# 這裡先讀憑證檔的 claudeAiOauth.expiresAt，過期就直接發出「請重新登入」的明確告警並跳過，
+# 不白跑產線、也不讓人看著 401 猜原因。
+# 註：設了長效 token（環境變數 CLAUDE_CODE_OAUTH_TOKEN）時本檢查自動略過——那條路才是根治。
+function Test-ClaudeLogin {
+    if ($env:CLAUDE_CODE_OAUTH_TOKEN) {
+        "CLI LOGIN: 使用長效 token（CLAUDE_CODE_OAUTH_TOKEN），略過到期檢查。" | Add-Content $log
+        return $true
+    }
+    $cred = Join-Path $env:USERPROFILE ".claude\.credentials.json"
+    if (-not (Test-Path $cred)) {
+        "CLI LOGIN: 找不到憑證檔，略過檢查（交給 Attempt 自行嘗試）。" | Add-Content $log
+        return $true
+    }
+    try {
+        $j = Get-Content $cred -Raw -ErrorAction Stop | ConvertFrom-Json
+        $ms = $j.claudeAiOauth.expiresAt
+        if (-not $ms) {
+            "CLI LOGIN: 憑證檔沒有 expiresAt 欄位，略過檢查。" | Add-Content $log
+            return $true
+        }
+        $exp  = [DateTimeOffset]::FromUnixTimeMilliseconds($ms).LocalDateTime
+        $mins = ($exp - (Get-Date)).TotalMinutes
+        if ($mins -le 0) {
+            "CLI LOGIN: 已於 $($exp.ToString('yyyy-MM-dd HH:mm')) 過期（$([math]::Abs([math]::Round($mins))) 分鐘前）。" | Add-Content $log
+            return $false
+        }
+        "CLI LOGIN: 有效至 $($exp.ToString('yyyy-MM-dd HH:mm'))（剩 $([math]::Round($mins)) 分鐘）。" | Add-Content $log
+        if ($mins -lt 90) {
+            "CLI LOGIN: ⚠ 不到 90 分鐘就到期，本次可能跑到一半失效。" | Add-Content $log
+        }
+        return $true
+    } catch {
+        "CLI LOGIN: 讀取憑證檔失敗（$($_.Exception.Message)），略過檢查。" | Add-Content $log
+        return $true
+    }
+}
+if (-not (Test-ClaudeLogin)) {
+    "SKIP: Claude CLI 登入已過期，今天不產片（避免白跑產線）。" | Add-Content $log
+    Send-Alert "阿遠老師 CLI 登入過期" "Claude Code 登入已過期，心跳叫不動 Agent，今天沒發片。請在終端機執行 claude auth login（登入 d086110）。註：auth login 只有約 8 小時效期，長久之計是用 claude setup-token 設定長效 token。"
+    Ping-Health "/fail"
+    exit 0
+}
+
 # ---- 漸進公開策略 ----
 # 觀察期內發的影片設 unlisted（不公開、有連結才看得到），方便先看品質；
 # 到「公開起始日」當天起自動改成 public。env 會傳給 claude 子程序與 upload_youtube.py。
