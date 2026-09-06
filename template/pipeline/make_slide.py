@@ -1,10 +1,13 @@
 """手繪風投影片字卡產生器（1920x1080）。
 
 用法:
-    python make_slide.py "標題文字" "內文文字(可空)" output.png [mascot]
+    python make_slide.py "標題文字" "內文文字(可空)" output.png [mascot] [illust]
 
 [mascot] 選填：素材 png 路徑，或 auto:主題關鍵字。給了就讓吉祥物在右下角入鏡。
-相容舊版三參數呼叫（無吉祥物）。
+[illust] 選填：AI 生成插圖的 png 路徑（draw-gpt 產的 Q 版矽膠風圖）。
+         給了就切成「標題→插圖→精簡內文」版型，插圖是視覺主體、不再放吉祥物。
+         內文請縮短（1~2 個重點），否則會被擠掉。
+相容舊版三／四參數呼叫。
 """
 import os
 import random
@@ -31,12 +34,30 @@ def wrap(measure, text, font, max_w):
     return lines
 
 
+def place_illust(img, path, max_w, max_h, cx, top):
+    """把插圖等比縮到框內、置中貼上，加手繪風外框讓它融入版面。回傳底部 y。"""
+    im = Image.open(path).convert("RGB")
+    scale = min(max_w / im.width, max_h / im.height)
+    im = im.resize((int(im.width * scale), int(im.height * scale)), Image.LANCZOS)
+    x = cx - im.width // 2
+    img.paste(im, (x, top))
+    d = ImageDraw.Draw(img)
+    S.hand_rect(d, [x - 8, top - 8, x + im.width + 8, top + im.height + 8], S.INK, 4, 2.5)
+    return top + im.height + 8
+
+
 def main():
     random.seed(3)
     title = sys.argv[1]
     body = sys.argv[2]
     out_path = sys.argv[3]
     mascot_arg = sys.argv[4] if len(sys.argv) > 4 else ""
+    illust_arg = sys.argv[5] if len(sys.argv) > 5 else ""
+    if illust_arg == "-":
+        illust_arg = ""
+    if illust_arg and not os.path.exists(illust_arg):
+        print(f"WARN: 插圖不存在，改用一般版型：{illust_arg}")
+        illust_arg = ""
 
     # 防呆：輸出必須是 .png（避免空參數位移時誤覆蓋素材檔）
     if not out_path.lower().endswith(".png"):
@@ -58,7 +79,39 @@ def main():
     if mascot_arg:
         mascot_path = mascot_lib.pick(mascot_arg[5:]) if mascot_arg.startswith("auto:") else mascot_arg
 
-    if VERTICAL:
+    if VERTICAL and illust_arg:
+        # 直式＋插圖：標題置頂（縮小）→ 插圖當視覺主體 → 精簡內文收底。不放吉祥物。
+        tx, ty = 96, 180
+        y = S.draw_title(img, title, "", tx, ty, 104, W - tx - 80, line_gap=132)
+        y = place_illust(img, illust_arg, W - 200, 900, W // 2, y + 44)
+        if body:
+            bf = S.load_font(60)
+            y += 44
+            for b in [x.strip() for x in body.split("｜") if x.strip()]:
+                lines = wrap(measure, b, bf, W - 180 - 90)
+                d.ellipse([110, y + 24, 136, y + 50], fill=S.RED)
+                for line in lines:
+                    d.text((172, y), line, font=bf, fill=S.INK)
+                    y += 84
+                y += 20
+    elif not VERTICAL and illust_arg:
+        # 橫式＋插圖：插圖靠右當主體，文字走左側。
+        iw, ih = 820, H - 300
+        ix = W - iw // 2 - 120
+        place_illust(img, illust_arg, iw, ih, ix, 170)
+        text_right = W - iw - 220
+        y = S.draw_title(img, title, "", 130, 140, 108, text_right - 130, line_gap=136)
+        if body:
+            bf = S.load_font(60)
+            y += 36
+            for b in [x.strip() for x in body.split("｜") if x.strip()]:
+                lines = wrap(measure, b, bf, text_right - 210)
+                d.ellipse([140, y + 22, 164, y + 46], fill=S.RED)
+                for line in lines:
+                    d.text((196, y), line, font=bf, fill=S.INK)
+                    y += 84
+                y += 20
+    elif VERTICAL:
         # 直式 Shorts：標題置頂吃滿寬、內文中段、吉祥物置底置中。
         if mascot_path:
             mascot = S.fit_mascot(mascot_path, 700, flip=False)
