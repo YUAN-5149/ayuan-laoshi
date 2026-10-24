@@ -86,6 +86,17 @@ if (-not (Wait-Network)) {
 "=== 同步記憶 (sync_memory) @ $(Get-Date -Format o) ===" | Add-Content $log
 python "pipeline\sync_memory.py" *>> $log
 
+# 先更新 edge-tts：微軟每隔幾個月改端點驗證，舊版會被 403 擋、整支靜默降級成機器音
+# （2026-10-13/14 就是這樣，7.2.8→7.3.1 才恢復）。上限 180 秒，失敗或卡住都不擋發片。
+"=== 更新 edge-tts @ $(Get-Date -Format o) ===" | Add-Content $log
+try {
+    $pip = Start-Process -FilePath 'python' -ArgumentList @('-m', 'pip', 'install', '-U', '-q', '--disable-pip-version-check', 'edge-tts') -NoNewWindow -PassThru -RedirectStandardOutput 'logs\pip.out' -RedirectStandardError 'logs\pip.err'
+    $pip | Wait-Process -Timeout 180 -ErrorAction SilentlyContinue
+    if (-not $pip.HasExited) { try { & taskkill /T /F /PID $pip.Id 2>&1 | Out-Null } catch {}; "edge-tts 更新逾時，已略過" | Add-Content $log }
+    foreach ($f in @('logs\pip.out', 'logs\pip.err')) { if (Test-Path $f) { Get-Content $f -Raw -ErrorAction SilentlyContinue | Add-Content $log; Remove-Item $f -Force -ErrorAction SilentlyContinue } }
+    "edge-tts 版本：$((python -m pip show edge-tts 2>$null | Select-String '^Version:') -replace 'Version:\s*','')" | Add-Content $log
+} catch { "edge-tts 更新失敗（略過）：$($_.Exception.Message)" | Add-Content $log }
+
 # 偵測「今天是否已成功發片」：MEMORY.md 含 `<!-- PUBLISHED:YYYY-MM-DD -->` 標記才算。
 # 用明確標記避免誤判（例如 Agent 在「待處理」段落寫到今天日期會被當成已發片）。
 function Test-PublishedToday {
@@ -253,6 +264,9 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     }
     # 把子程序輸出併回主 log，再清掉暫存。
     foreach ($f in @($outTmp, $errTmp)) { if (Test-Path $f) { Get-Content $f -Raw -ErrorAction SilentlyContinue | Add-Content $log; Remove-Item $f -Force -ErrorAction SilentlyContinue } }
+    # tts.py 降級機器音時會留標記檔（並已推 ntfy），這裡記進主 log 方便事後查。
+    $ttsFlag = "logs\tts-fallback-$(Get-Date -Format 'yyyyMMdd').txt"
+    if (Test-Path $ttsFlag) { "TTS=FALLBACK 今天有段落降級成 Windows 機器音（詳見 $ttsFlag）" | Add-Content $log }
 
     if (Test-PublishedToday) {
         "RESULT=SUCCESS (偵測到今日 $today 發布紀錄)" | Add-Content $log

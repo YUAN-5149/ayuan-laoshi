@@ -165,6 +165,41 @@ def tts_sapi(text: str, out_path: str):
             os.remove(wav)
 
 
+def alert_fallback(err):
+    """edge-tts 降級離線語音時告警：寫標記檔給心跳記 log + 推 ntfy（同一天只推一次）。
+    2026-10-13/14 微軟端點對舊版 edge-tts 回 403，整支靜默變成機器音、金主自己聽了才發現。
+    告警失敗一律吞掉，絕不擋發片。"""
+    import datetime
+    import urllib.request
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        logs = os.path.join(root, "logs")
+        os.makedirs(logs, exist_ok=True)
+        flag = os.path.join(logs, f"tts-fallback-{datetime.date.today():%Y%m%d}.txt")
+        first = not os.path.exists(flag)
+        with open(flag, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.datetime.now():%H:%M:%S} {err}\n")
+        if not first:
+            return
+        topic = os.environ.get("AYUAN_NTFY_TOPIC", "")
+        topic_file = os.path.join(root, "pipeline", "ntfy_topic.txt")
+        if not topic and os.path.exists(topic_file):
+            with open(topic_file, encoding="utf-8") as f:
+                topic = f.read().strip()
+        if not topic:
+            return
+        body = ("配音降級成 Windows 機器音\n"
+                f"edge-tts 失敗：{err}\n"
+                "多半是微軟改驗證，執行 python -m pip install -U edge-tts 再重跑。").encode("utf-8")
+        req = urllib.request.Request(
+            f"https://ntfy.sh/{topic}", data=body, method="POST",
+            headers={"Title": "AYuan Laoshi TTS Fallback", "Priority": "high",
+                     "Tags": "warning,speaker", "Content-Type": "text/plain; charset=utf-8"})
+        urllib.request.urlopen(req, timeout=15).read()
+    except Exception as e:
+        print(f"（TTS 降級告警送出失敗，不影響發片：{e}）")
+
+
 def synth(text: str, out_path: str):
     """單段文字轉語音，依環境變數選後端，edge-tts 失敗自動降級離線語音。"""
     if os.environ.get("GPT_SOVITS_API"):
@@ -178,6 +213,7 @@ def synth(text: str, out_path: str):
                 raise RuntimeError("edge-tts 產出為空")
         except Exception as e:
             print(f"edge-tts 失敗，改用 Windows 離線語音保底：{e}")
+            alert_fallback(e)
             tts_sapi(text, out_path)
 
 
