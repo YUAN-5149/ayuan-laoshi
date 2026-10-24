@@ -34,16 +34,32 @@ def wrap(measure, text, font, max_w):
     return lines
 
 
+ILLUST_BOX = None  # 插圖實際貼上的位置，給 make_video 做「框內鏡頭微動」用
+
+
 def place_illust(img, path, max_w, max_h, cx, top):
     """把插圖等比縮到框內、置中貼上，加手繪風外框讓它融入版面。回傳底部 y。"""
+    global ILLUST_BOX
     im = Image.open(path).convert("RGB")
     scale = min(max_w / im.width, max_h / im.height)
     im = im.resize((int(im.width * scale), int(im.height * scale)), Image.LANCZOS)
     x = cx - im.width // 2
     img.paste(im, (x, top))
+    ILLUST_BOX = {"path": os.path.abspath(path), "x": x, "y": top, "w": im.width, "h": im.height}
     d = ImageDraw.Draw(img)
     S.hand_rect(d, [x - 8, top - 8, x + im.width + 8, top + im.height + 8], S.INK, 4, 2.5)
     return top + im.height + 8
+
+
+def write_illust_sidecar(out_path):
+    """有插圖就寫 <字卡>.illust.json（插圖位置），沒有就清掉舊的，避免重做字卡時殘留。"""
+    import json
+    side = os.path.splitext(out_path)[0] + ".illust.json"
+    if ILLUST_BOX:
+        with open(side, "w", encoding="utf-8") as f:
+            json.dump(ILLUST_BOX, f, ensure_ascii=False)
+    elif os.path.exists(side):
+        os.remove(side)
 
 
 def main():
@@ -149,6 +165,7 @@ def main():
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     img.convert("RGB").save(out_path)
+    write_illust_sidecar(out_path)
     print(f"OK: {out_path}")
 
 

@@ -59,6 +59,22 @@ def find_bgm():
     return None
 
 
+def load_illust_box(slide_path: str):
+    """讀 make_slide 寫的 <字卡>.illust.json；沒有、壞掉或插圖檔不見就回 None（照舊整張推近）。"""
+    import json
+    side = os.path.splitext(slide_path)[0] + ".illust.json"
+    if not os.path.exists(side):
+        return None
+    try:
+        with open(side, encoding="utf-8") as f:
+            box = json.load(f)
+        if os.path.exists(box["path"]) and box["w"] >= 16 and box["h"] >= 16:
+            return box
+    except Exception as e:
+        print(f"WARN: 讀不到 {side}，該張改用整張推近：{e}")
+    return None
+
+
 def audio_duration(path: str) -> float:
     out = subprocess.run(
         [FFPROBE, "-v", "error", "-show_entries", "format=duration",
@@ -100,21 +116,52 @@ def main():
         inputs += ["-i", os.path.abspath(img)]
     inputs += ["-i", os.path.abspath(audio)]
     audio_idx = len(slides)
+    next_idx = audio_idx + 1
 
     anchors = [
         ("iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),  # 置中推近
         ("0", "0"),                                  # 往左上漂
         ("iw-iw/zoom", "ih-ih/zoom"),                # 往右下漂
     ]
+    # 插圖字卡的「框內鏡頭微動」：字卡文字不動，只有插圖在框裡整段持續慢慢動（金主 2026-10-24 訂）。
+    # 用 on/D（輸出幀/總幀，D 在下面換成實際幀數）算位置，整張字卡從頭動到尾；三種動法輪流，避免每張都一樣。
+    amp = float(os.environ.get("AYUAN_ILLUST_MOTION", "0.12"))
+    center = ("iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)")
+    illust_moves = [
+        (f"1+{amp}*on/D", *center),                          # 推近
+        (f"1+{amp}-{amp}*on/D", *center),                    # 拉遠
+        (f"1+{amp}", "(iw-iw/zoom)*on/D", "ih/2-(ih/zoom/2)"),  # 左→右平移
+    ]
     parts = []
+    n_illust = 0
     for i, dur in enumerate(durations):
         dframes = max(1, round(dur * fps))
+        box = load_illust_box(slides[i])
+        if box:
+            # 字卡本體靜止，插圖放大 4 倍再 zoompan（降低整數座標造成的抖動），疊回原位。
+            z, mx, my = (e.replace("/D", f"/{dframes}") for e in illust_moves[n_illust % len(illust_moves)])
+            n_illust += 1
+            w, h = box["w"] // 2 * 2, box["h"] // 2 * 2
+            inputs += ["-i", box["path"]]
+            parts.append(
+                f"[{i}:v]scale={OUT_W}:{OUT_H},setsar=1,"
+                f"loop=loop={dframes - 1}:size=1:start=0,setpts=N/{fps}/TB[bg{i}]"
+            )
+            parts.append(
+                f"[{next_idx}:v]scale={w * 4}:{h * 4},"
+                f"zoompan=z='{z}':d={dframes}:x='{mx}':y='{my}':s={w}x{h}:fps={fps},setsar=1[il{i}]"
+            )
+            parts.append(f"[bg{i}][il{i}]overlay={box['x']}:{box['y']}:shortest=1,format=yuv420p[v{i}]")
+            next_idx += 1
+            continue
         ax, ay = anchors[i % len(anchors)]
         parts.append(
             f"[{i}:v]scale={OUT_W * 2}:{OUT_H * 2},"
             f"zoompan=z='min(zoom+0.0007,1.12)':d={dframes}:x='{ax}':y='{ay}':"
-            f"s={OUT_W}x{OUT_H}:fps={fps},setsar=1[v{i}]"
+            f"s={OUT_W}x{OUT_H}:fps={fps},setsar=1,format=yuv420p[v{i}]"
         )
+    if n_illust:
+        print(f"（{n_illust} 張插圖字卡套用框內鏡頭微動）")
     parts.append("".join(f"[v{i}]" for i in range(len(slides)))
                  + f"concat=n={len(slides)}:v=1:a=0[vc]")
     if subs:
@@ -132,7 +179,7 @@ def main():
         fade_st = max(0.0, total - 2.0)
         parts.append(
             f"[{audio_idx}:a]volume=1.0[an];"
-            f"[{audio_idx + 1}:a]volume={vol},afade=t=out:st={fade_st:.2f}:d=2[am];"
+            f"[{next_idx}:a]volume={vol},afade=t=out:st={fade_st:.2f}:d=2[am];"
             f"[an][am]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]"
         )
         amap = "[aout]"
