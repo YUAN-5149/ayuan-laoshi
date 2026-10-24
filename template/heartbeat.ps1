@@ -209,7 +209,8 @@ if (-not $env:YT_PRIVACY) {
 $LongDay = if ($env:AYUAN_LONG_DAY) { $env:AYUAN_LONG_DAY } else { 'Sunday' }
 if ((Get-Date).DayOfWeek.ToString() -eq $LongDay) {
     $env:VIDEO_VERTICAL = '0'
-    $FormatHint = '長片（橫式 16:9、深入講解、約 2~3 分鐘、字卡 6~9 張）'
+    # 2026-10-24 金主明確指定恢復週日橫式長片：Agent 曾依舊數據自行改成直式 Shorts，現在不准覆蓋。
+    $FormatHint = '長片（橫式 16:9、深入講解、約 2~3 分鐘、字卡 6~9 張）。【金主 2026-10-24 明確指定】今天一定要做橫式長片，不可自行改成直式 Shorts，MEMORY 裡「橫式長片已死」的舊結論不適用於今天'
 } else {
     $env:VIDEO_VERTICAL = '1'
     $FormatHint = 'Shorts（直式 9:16、精簡明快、60~90 秒、字卡 4~6 張）'
@@ -229,6 +230,13 @@ if ($IsSeriesDay) {
     "SERIES=off（系列日設定=$($SeriesDays -join '/')，今天不是）" | Add-Content $log
 }
 
+# ---- GitHub 日（金主 2026-10-24 訂）----
+# 指定星期介紹一個 GitHub ≥1000 星、未介紹過的開源專案，規則在工作區 GITHUB.md。
+# 改日子設 AYUAN_GITHUB_DAY（英文星期）；設成不存在的值（如 None）或刪掉 GITHUB.md 即停用。系列日優先。
+$GithubDay = if ($env:AYUAN_GITHUB_DAY) { $env:AYUAN_GITHUB_DAY } else { 'Saturday' }
+$IsGithubDay = (-not $IsSeriesDay) -and ((Get-Date).DayOfWeek.ToString() -eq $GithubDay) -and (Test-Path "GITHUB.md")
+if ($IsGithubDay) { "GITHUB=ON（今天 $((Get-Date).DayOfWeek) 是 GitHub 日，將依 GITHUB.md 選專案）" | Add-Content $log }
+
 $maxAttempts = 2
 # claude 子程序逾時上限：防止 CLI 卡死導致整個心跳無限阻塞——「卡住」是沒產出也沒告警的元兇
 # （曾在週日長片日因 claude -p 無 timeout 卡死，整天沒發片也沒推播）。
@@ -237,6 +245,7 @@ $attemptTimeoutSec = if ($env:AYUAN_ATTEMPT_TIMEOUT_SEC) { [int]$env:AYUAN_ATTEM
 # 解析 claude 執行檔：npm 安裝時是 claude.ps1（外部腳本），需用 powershell -File 啟動才能 PassThru 控制與逾時強殺。
 $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
 $seriesHint = if ($IsSeriesDay) { "【最優先·今天是系列日】今天出的是 SERIES.md 指定的主題系列，不是一般科普題。動手前務必先完整讀過工作區的 SERIES.md，然後：依它的選題順序與已講清單挑題（**不要用 MEMORY.md 的一般待發題庫**）、照它指定的腳本型態寫、標題與描述套它的 SEO 規則、加它指定的播放清單、遵守它的內容準則；發完把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
+if ($IsGithubDay) { $seriesHint = "【最優先·今天是 GitHub 日】今天介紹一個 GitHub 上 1000 顆星以上、還沒介紹過的開源專案，不是一般科普題。動手前務必先完整讀過工作區的 GITHUB.md，然後：用 python pipeline\github_repo.py search 找候選、定案前 python pipeline\github_repo.py check owner/repo 必須回 OK（**星數一律以工具查到的為準，不可憑印象**）、**不要用 MEMORY.md 的一般待發題庫**、照它的腳本型態與 SEO 規則寫、加「GitHub 寶藏專案」播放清單；發完把本集（含 github.com 網址）補進 GITHUB.md 的「已介紹專案」。 " }
 $prompt = "$seriesHint`n心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
 
 for ($i = 1; $i -le $maxAttempts; $i++) {

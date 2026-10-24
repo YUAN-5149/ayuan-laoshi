@@ -8,7 +8,7 @@ description: 製作並上傳一支 YouTube 知識短片的完整 SOP。當需要
 工作目錄＝Agent 根目錄（這個 skill 上面三層的目錄，內含 CLAUDE.md / MEMORY.md / pipeline/）。以下所有相對路徑都以此為準。被心跳呼叫時，`heartbeat.ps1` 已經 `Set-Location $PSScriptRoot` 設好 cwd，不要自己再 cd 到別處。
 
 ## 格式：平日 Shorts、長片日橫式（看心跳指示）
-本頻道以 **YouTube Shorts（直式 9:16, 1080×1920）** 為主，搭配偶爾的橫式長片（預設週日）。
+本頻道以 **YouTube Shorts（直式 9:16, 1080×1920）** 為主，**週日固定出橫式長片**（金主 2026-10-24 明確指定恢復；心跳說長片就做長片，**不可自行改成 Shorts**）。
 **心跳訊息開頭會告訴你今天的格式**；`make_slide` / `make_video` 已由環境變數 `VIDEO_VERTICAL` 自動切換版型（你不用下參數），但**腳本長度與字卡張數要配合格式**：
 - **Shorts**：精簡明快 60~90 秒、字卡 4~6 張、每點要短、節奏快、鉤子更要狠。
 - **長片**：深入 2~3 分鐘、字卡 6~9 張，可多舉例、多延伸。
@@ -21,7 +21,8 @@ description: 製作並上傳一支 YouTube 知識短片的完整 SOP。當需要
 
 ### 1. 選題
 - **先判斷今天是不是「系列日」**：心跳訊息若出現「今天是系列日」，或工作區有 `SERIES.md` 且今天是它指定的出片日 → **今天走系列，不要用下面的一般選題流程、不要動 MEMORY 的待發題庫**。改成：讀完 `SERIES.md` → 依它的「選題順序」與「已講清單」挑今天的題 → 照它指定的腳本型態寫 → 標題與描述套它的 SEO 規則 → 發完把本集補進 SERIES.md 的已講清單。**做完這條就跳到第 2 步，以下一般選題不適用。**
-- （以下為非系列日的一般選題）讀 `MEMORY.md` 的「已發布影片清單」，避免重複。
+- 🔴 **再判斷今天是不是「GitHub 日」**：心跳訊息若出現「今天是 GitHub 日」（目前＝週六）→ 讀完 `GITHUB.md` → 用 `python pipeline\github_repo.py search` 找候選 → 定案前 `python pipeline\github_repo.py check owner/repo` **必須回 OK**（星數以工具結果為準，不可憑印象；DENY 就換一個）→ 照它的腳本型態與 SEO 寫 → 加「GitHub 寶藏專案」播放清單 → 發完把本集（含 github.com 網址）補進 GITHUB.md「已介紹專案」。**不要動 MEMORY 的待發題庫，做完跳到第 2 步。**
+- （以下為非系列日、非 GitHub 日的一般選題）讀 `MEMORY.md` 的「已發布影片清單」，避免重複。
 - **若 `ANALYTICS.md` 存在，先讀它**：看哪幾支留存%／觀看數高，複製那支的選題方向、比喻風格、節奏；低留存的方向少碰。（這份由 `python pipeline\fetch_analytics.py` 更新，需先做過一次性授權。）
 - 選一個 AI 相關、能在兩分鐘內講清楚的概念（例：什麼是 RAG、什麼是 Token、AI 為什麼會幻覺、什麼是提示工程）。
 - 可上網查最近的 AI 熱門話題增加時效性。
