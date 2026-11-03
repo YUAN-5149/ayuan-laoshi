@@ -13,6 +13,26 @@ import sys
 import tempfile
 
 
+def edge_variants(part: str):
+    """同一句念起來一樣的替代寫法。微軟端點對某些中英混排字串會固定回 NoAudioReceived，
+    重試再多次都一樣（2026-11-03『研究顯示，Role prompting 在語氣…』只有原字串失敗，
+    改小寫／拿掉中英間空格／加逗號都正常）。依序回傳：(說明, [要合成的片段...])。"""
+    import re
+    seen = {part}
+    cands = [
+        ("英文改小寫", re.sub(r"[A-Za-z]+", lambda m: m.group(0).lower(), part)),
+        ("拿掉中英間空格", re.sub(r"(?<=[A-Za-z0-9])\s+(?=[一-鿿])|(?<=[一-鿿])\s+(?=[A-Za-z0-9])", "", part)),
+        ("中英交界加逗號", re.sub(r"(?<=[A-Za-z0-9])\s+(?=[一-鿿])", "，", part)),
+    ]
+    for label, t in cands:
+        if t not in seen and re.search(r"[\w一-鿿]", t):
+            seen.add(t)
+            yield label, [t]
+    pieces = [p for p in re.split(r"(?<=[，、,；;：:])", part) if re.search(r"[\w一-鿿]", p)]
+    if len(pieces) > 1:
+        yield "逗號處切開", pieces
+
+
 async def tts_edge(text: str, out_path: str):
     """edge-tts 逐句合成再串接（短句較不會觸發 NoAudioReceived），每句重試。"""
     import asyncio as _a
@@ -37,29 +57,50 @@ async def tts_edge(text: str, out_path: str):
 
     tmpdir = tempfile.mkdtemp()
     seg_files = []
+    counter = [0]
+
+    async def say(piece, tries):
+        """合成一小段，成功回傳檔案路徑，失敗回 (None, 最後錯誤)。"""
+        seg = os.path.join(tmpdir, f"seg_{counter[0]:03d}.mp3")
+        counter[0] += 1
+        last_err = None
+        for attempt in range(tries):
+            try:
+                # 2026-07-11 起微軟端點對 rate/prosody 參數回 NoAudioReceived（無 rate 正常）。
+                # 前 2 次照設定帶 rate（未來端點修好自動恢復 +8% 語速），之後改無 rate 保住品牌人聲。
+                if attempt < 2 and rate:
+                    comm = edge_tts.Communicate(piece, voice, rate=rate)
+                else:
+                    comm = edge_tts.Communicate(piece, voice)
+                await comm.save(seg)
+                if os.path.exists(seg) and os.path.getsize(seg) > 200:
+                    return seg, None
+            except Exception as e:  # NoAudioReceived 等間歇性錯誤
+                last_err = e
+            await _a.sleep(1.5)
+        return None, last_err
+
     try:
-        for i, part in enumerate(parts):
-            seg = os.path.join(tmpdir, f"seg_{i:03d}.mp3")
-            done, last_err = False, None
-            tries = int(os.environ.get("EDGE_TTS_TRIES", "8"))
-            for attempt in range(tries):
-                try:
-                    # 2026-07-11 起微軟端點對 rate/prosody 參數回 NoAudioReceived（無 rate 正常）。
-                    # 前 2 次照設定帶 rate（未來端點修好自動恢復 +8% 語速），之後改無 rate 保住品牌人聲。
-                    if attempt < 2 and rate:
-                        comm = edge_tts.Communicate(part, voice, rate=rate)
-                    else:
-                        comm = edge_tts.Communicate(part, voice)
-                    await comm.save(seg)
-                    if os.path.exists(seg) and os.path.getsize(seg) > 200:
-                        done = True
+        tries = int(os.environ.get("EDGE_TTS_TRIES", "5"))
+        for part in parts:
+            seg, last_err = await say(part, tries)
+            if seg:
+                seg_files.append(seg)
+                continue
+            # 原句固定失敗 → 換念起來一樣的寫法再試（每種 3 次），全部失敗才降級機器音。
+            for label, pieces in edge_variants(part):
+                segs = []
+                for piece in pieces:
+                    s, last_err = await say(piece, 3)
+                    if not s:
                         break
-                except Exception as e:  # NoAudioReceived 等間歇性錯誤
-                    last_err = e
-                await _a.sleep(1.5)
-            if not done:
+                    segs.append(s)
+                if len(segs) == len(pieces):
+                    print(f"edge-tts 原句失敗，改用「{label}」成功：{part!r}")
+                    seg_files.extend(segs)
+                    break
+            else:
                 raise RuntimeError(f"edge-tts 此句重試後仍失敗：{part!r}（{last_err}）")
-            seg_files.append(seg)
 
         listfile = os.path.join(tmpdir, "list.txt")
         with open(listfile, "w", encoding="utf-8") as f:

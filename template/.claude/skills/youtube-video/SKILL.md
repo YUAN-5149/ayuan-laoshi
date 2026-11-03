@@ -74,7 +74,7 @@ python pipeline\make_slide.py "標題文字" "重點內文" output\<日期>\slid
 python pipeline\narrate_slides.py output\<日期>\segments.txt output\<日期>\slides output\<日期>\narration.mp3
 ```
 - 每段各自配音、量測秒數，自動產生**與字卡同步**的 narration.mp3 與 timing.txt（不必手寫 timing）。
-- 男聲 zh-TW-YunJheNeural；edge-tts 抽風會自動重試 10 次、再不行才降級離線語音。
+- 男聲 zh-TW-YunJheNeural；edge-tts 抽風會自動重試，某句固定失敗時會自動換「念起來一樣」的寫法（英文改小寫／拿掉中英間空格／逗號切開）再試，全失敗才降級離線語音並推 ntfy。
 
 ### 5.5 產生字幕（燒進影片，必做）
 ```
