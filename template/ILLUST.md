@@ -21,7 +21,7 @@
 - 阿遠外型（寫 prompt 時照抄，別自己改）：淺綠頭盔＋咖啡色盔飾、黃色消防衣＋螢光綠反光條、灰色半罩口罩、
   黑手套黑靴、背後灰色空氣瓶；3D 軟膠公仔質感，大頭 Q 版比例。
 
-## 四種用途（4 張裡**至少 3 張要有阿遠**）
+## 四種用途（4 張裡**至少 3 張要有阿遠**；需要第二個人時見下方「配角」）
 | 類型 | 什麼時候用 | 提示詞怎麼寫 | 背景 |
 |---|---|---|---|
 | **角色情境圖**（最常用） | 講痛點、講比喻時 | 讓**阿遠親自演出比喻**：「阿遠抓著頭盔、困惑地看著一長串每格都一樣的蘋果清單」 | 暖白底 |
@@ -67,6 +67,40 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\高知淵\.claude\
 - **`-Name`** 用 `seg2`／`seg3`… 對應段號，方便對照。
 - 中文 prompt 要先寫成 UTF-8 檔再傳路徑；**英文可直接傳字串**（建議都用英文，比較準）。
 - 回傳 `OK path=... size=...` 就是成功，把那個路徑接到 make_slide。
+
+## 配角（人物資產包，2026-11-09 金主提供）
+金主為了人物多樣性做了一批同畫風的配角。**主角永遠是阿遠，出場比例最高**；配角只在劇情需要「第二個人」時才請出來。
+正本：`C:\Users\高知淵\Documents\Codex\2026-10-24(各人物)\referenced-chatgpt-conversation-this-is-an\outputs\`
+工作區副本：`_style\cast\`（四面轉面圖，英文檔名）。
+
+### 使用規則（硬性）
+1. **每支片 4 張插圖裡，最多 2 張有配角**；其餘照舊只有阿遠。**標題卡、收尾卡、縮圖一律只用阿遠**。
+2. **有配角的圖，阿遠一定也在畫面裡，而且是主角**：站前面、比較大、焦點在他身上，配角在旁邊或後方。
+3. **一張圖最多 1 位配角**（搜救隊員＋搜救犬算一組）。
+4. 依劇情挑人，**沒有適合的情境就不要硬塞**。只用下表已定稿的角色；資產包裡的「造型提案」（EMT、白色制服、紅色消防員提案）**還沒定稿，不要用**。
+
+### 角色表
+| 參考圖（`-Ref`） | 角色 | 適合的情境 | prompt 裡的配角描述（照抄） |
+|---|---|---|---|
+| `_style\cast\pair_red_m.jpg` | 男性紅色制服消防員（未戴帽） | 同事、對話、一起看電腦、被阿遠解說的人、辦公室日常 | the chibi male firefighter with short black hair, red short-sleeve uniform shirt with chest pockets, dark navy trousers, black belt with silver buckle, black shoes |
+| `_style\cast\pair_red_m_cap.jpg` | 男性紅色制服消防員（戴帽） | 正式場合、長官、指揮、宣導、檢查 | same as above plus a dark grey service cap with gold emblem |
+| `_style\cast\pair_red_f.jpg` | 女性紅色制服消防員（未戴帽） | 同事、對話、提問的人、一起學習 | the chibi female firefighter with short black bob hair, red short-sleeve uniform shirt, dark navy trousers, black shoes |
+| `_style\cast\pair_red_f_cap.jpg` | 女性紅色制服消防員（戴帽） | 正式場合、講師、宣導、評審 | same as above plus a dark grey service cap with gold emblem |
+| `_style\cast\pair_lifeguard.jpg` | 救生隊員 | 水、游泳、救溺、「被救起來」的比喻 | the chibi lifeguard rescuer with a yellow rescue helmet, blue uniform, red life vest with two black straps, black gloves and boots |
+| `_style\cast\pair_rescue_team.jpg` | 搜救隊員＋搜救犬 | 搜尋、找東西、檢索（RAG、搜尋引擎）、聞線索 | the chibi search-and-rescue handler with a yellow rescue helmet with clear visor, yellow rescue suit with red chest panel and silver reflective bands, together with a slim tan German-shepherd-type search dog with black muzzle wearing an orange rescue harness and blue booties |
+| `_style\cast\pair_rescue_dog.jpg` | 搜救犬（單獨） | 只需要狗的畫面（嗅聞、找到東西、忠實夥伴） | a slim tan German-shepherd-type search dog with black muzzle, orange rescue harness, blue booties |
+
+### 有配角時的 prompt 結構
+```
+Two characters from the attached reference image. MAIN CHARACTER (left sheet): the chibi firefighter with pale
+lime-green helmet with brown crest, yellow turnout coat with lime reflective stripes, grey half face mask, black
+gloves and boots - he is in front, larger and in focus, <阿遠在做什麼>. SUPPORTING CHARACTER (right sheet):
+<上表的配角描述> - <配角在旁邊做什麼>. Keep both character designs exactly identical to their reference sheets.
+<固定結尾 A 或 B 從 "Same 3D chibi vinyl figure render style" 開始>
+```
+- `-Ref` 改傳上表的 pair 檔（阿遠設定表＋配角轉面圖已拼成一張，因為 `-Ref` 只能一張）。
+- 2026-11-09 實測：阿遠＋女性紅色制服，兩人造型都準（範例：`_style\cast\_example_pair_red_f.png`），一張約 50 秒。
+- 生圖失敗的處理規則同下面的🛑段（配角圖 FAIL 也算進連續 FAIL）。
 
 ## 接進字卡
 `make_slide.py` 第 **5** 個參數就是插圖（第 4 個是吉祥物，兩者擇一）：
