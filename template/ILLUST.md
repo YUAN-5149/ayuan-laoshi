@@ -86,7 +86,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\高知淵\.claude\
 | `_style\cast\pair_red_m_cap.jpg` | 男性紅色制服消防員（戴帽） | 正式場合、長官、指揮、宣導、檢查 | same as above plus a dark grey service cap with gold emblem |
 | `_style\cast\pair_red_f.jpg` | 女性紅色制服消防員（未戴帽） | 同事、對話、提問的人、一起學習 | the chibi female firefighter with short black bob hair, red short-sleeve uniform shirt, dark navy trousers, black shoes |
 | `_style\cast\pair_red_f_cap.jpg` | 女性紅色制服消防員（戴帽） | 正式場合、講師、宣導、評審 | same as above plus a dark grey service cap with gold emblem |
-| `_style\cast\pair_emt.jpg` | 男性 EMT 緊急救護技術員（2026-11-09 金主指定加入） | 醫療、健康、急救、AI 看病／AI 醫療建議、「找真正的專業人員」 | the chibi male EMT with short black hair, red short-sleeve duty shirt under a fluorescent yellow medical response vest with red-and-silver checker reflective bands, dark navy trousers, black shoes |
+| `_style\cast\pair_emt.jpg` | 男性 EMT 緊急救護技術員（2026-11-09 定稿，有四面轉面圖） | 醫療、健康、急救、AI 看病／AI 醫療建議、「找真正的專業人員」 | the chibi male EMT with short black hair, red short-sleeve duty shirt under a fluorescent yellow medical response vest with red-and-silver checker reflective bands, dark navy trousers, black shoes |
 | `_style\cast\pair_white_m.jpg` | 白色制服消防員・男（2026-11-09 定稿，有四面轉面圖） | 正式場合、典禮、頒獎、主管、評審、行政文書 | the chibi male firefighter with short black hair, white short-sleeve collared uniform shirt with two chest pockets and a small red chest badge, dark navy trousers, black belt with silver buckle, black leather shoes |
 | `_style\cast\pair_lifeguard.jpg` | 救生隊員 | 水、游泳、救溺、「被救起來」的比喻 | the chibi lifeguard rescuer with a yellow rescue helmet, blue uniform, red life vest with two black straps, black gloves and boots |
 | `_style\cast\pair_rescue_team.jpg` | 搜救隊員＋搜救犬 | 搜尋、找東西、檢索（RAG、搜尋引擎）、聞線索 | the chibi search-and-rescue handler with a yellow rescue helmet with clear visor, yellow rescue suit with red chest panel and silver reflective bands, together with a slim tan German-shepherd-type search dog with black muzzle wearing an orange rescue harness and blue booties |
@@ -101,7 +101,7 @@ gloves and boots - he is in front, larger and in focus, <阿遠在做什麼>. SU
 <固定結尾 A 或 B 從 "Same 3D chibi vinyl figure render style" 開始>
 ```
 - `-Ref` 改傳上表的 pair 檔（阿遠設定表＋配角轉面圖已拼成一張，因為 `-Ref` 只能一張）。
-- EMT 目前只有正面提案圖（沒有四面轉面圖），側面／背面靠模型推測；畫面盡量讓他正面或四分之三側面出場。其他角色都有四面轉面圖。
+- 所有配角都有四面轉面圖（搜救犬為定裝＋三面），任何角度都可以畫。
 - 2026-11-09 實測：阿遠＋女性紅色制服、阿遠＋EMT，兩組造型都準（範例：`_style\cast\_example_pair_red_f.png`），一張約 50 秒。
 - 生圖失敗的處理規則同下面的🛑段（配角圖 FAIL 也算進連續 FAIL）。
 
