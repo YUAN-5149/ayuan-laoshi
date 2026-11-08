@@ -58,7 +58,7 @@ function Ping-Health([string]$suffix = "") {
 }
 
 # 等網路就緒：排程喚醒的瞬間 Wi-Fi 常還沒連上，DNS 全掛會讓 sync/token 預檢/ntfy 全部誤判
-# （曾因此整天沒發片、告警也推不出去；實測 15 分鐘可能仍不夠 → 預設 30 分）。
+# （2026-07-11 06:00 就因此整天沒發片、告警也推不出去；07-12 實測 15 分鐘仍不夠 → 拉長到 30 分）。
 function Wait-Network {
     param([int]$MaxWaitSec = 1800, [int]$IntervalSec = 30)
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -120,7 +120,7 @@ if (-not (Test-Path "pipeline\client_secret.json")) {
 }
 
 # 預檢上傳 token：過期且 refresh 失敗時，與其產一支無法上傳的片（浪費整輪產線+Claude 用量），
-# 不如直接告警請人工重新授權。（曾因 token 7 天過期、refresh 失敗而整支白做。）
+# 不如直接告警請人工重新授權。（2026-06-29 token 7 天過期、refresh 失敗就是這樣整支白做。）
 # 治本：把 Google OAuth 同意畫面從 Testing 發布成 Production，refresh token 才不會每 7 天過期。
 python "pipeline\check_upload_token.py" *>> $log
 $tokenCheck = $LASTEXITCODE
@@ -138,7 +138,7 @@ if ($tokenCheck -eq 3) {
 }
 if ($tokenCheck -ne 0) {
     "SKIP: 上傳 token 失效（check_upload_token 回 $tokenCheck），需人工重新授權，今天不產片。" | Add-Content $log
-    Send-Alert "阿遠老師 需重新授權" "YouTube 上傳 token 失效（多半 OAuth 仍在 Testing、refresh token 每 7 天過期）。請手動跑一次 upload 完成瀏覽器授權，或把 OAuth App 發布成 Production 根治。"
+    Send-Alert "阿遠老師 需重新授權" "YouTube 上傳 token 失效（多半 OAuth 仍在 Testing、refresh token 每 7 天過期）。請手動跑一次 upload 完成瀏覽器授權（登入 bbbb086110），或把 OAuth App 發布成 Production 根治。"
     Ping-Health "/fail"
     exit 0
 }
@@ -210,15 +210,16 @@ $LongDay = if ($env:AYUAN_LONG_DAY) { $env:AYUAN_LONG_DAY } else { 'Sunday' }
 if ((Get-Date).DayOfWeek.ToString() -eq $LongDay) {
     $env:VIDEO_VERTICAL = '0'
     # 2026-10-24 金主明確指定恢復週日橫式長片：Agent 曾依舊數據自行改成直式 Shorts，現在不准覆蓋。
-    $FormatHint = '長片（橫式 16:9、深入講解、約 2~3 分鐘、字卡 6~9 張）。【金主 2026-10-24 明確指定】今天一定要做橫式長片，不可自行改成直式 Shorts，MEMORY 裡「橫式長片已死」的舊結論不適用於今天'
+    $FormatHint = '長片（橫式 16:9、阿遠實測、約 3~6 分鐘、字卡 8~12 張）。【金主 2026-10-24 明確指定】今天一定要做橫式長片，不可自行改成直式 Shorts，MEMORY 裡「橫式長片已死」的舊結論不適用於今天'
 } else {
     $env:VIDEO_VERTICAL = '1'
-    $FormatHint = 'Shorts（直式 9:16、精簡明快、60~90 秒、字卡 4~6 張）'
+    # 2026-11-09 金主訂：Shorts 縮到 30~45 秒（舊版 70~110 秒，觀眾平均只看 28 秒就滑走）。
+    $FormatHint = 'Shorts（直式 9:16、30~45 秒、字卡 3~4 張、一支只講一個重點，腳本全長約 130~200 字）'
 }
 "FORMAT=$(if ($env:VIDEO_VERTICAL -eq '0') {'LONG 16:9'} else {'SHORTS 9:16'})（長片日=$LongDay）" | Add-Content $log
 
 # ---- 系列日策略（選用）----
-# 指定星期固定出某個主題系列（例：把考照系列排在週四、週五）。
+# 指定星期固定出某個主題系列（例：iPAS 考照系列排週四、週五）。
 # 啟用條件：環境變數 AYUAN_SERIES_DAYS 有值（逗號分隔英文星期，如 "Thursday,Friday"）
 # 且工作區有 SERIES.md（系列規劃書：定位、內容型態、選題順序、已講清單、SEO 規則）。
 # 未設變數或找不到 SERIES.md 就完全不影響原本流程。
@@ -236,17 +237,43 @@ if ($IsSeriesDay) {
 $GithubDay = if ($env:AYUAN_GITHUB_DAY) { $env:AYUAN_GITHUB_DAY } else { 'Saturday' }
 $IsGithubDay = (-not $IsSeriesDay) -and ((Get-Date).DayOfWeek.ToString() -eq $GithubDay) -and (Test-Path "GITHUB.md")
 if ($IsGithubDay) { "GITHUB=ON（今天 $((Get-Date).DayOfWeek) 是 GitHub 日，將依 GITHUB.md 選專案）" | Add-Content $log }
+# 系列片與 GitHub 片要講題目／專案，給到 45~60 秒。
+if (($IsSeriesDay -or $IsGithubDay) -and $env:VIDEO_VERTICAL -eq '1') {
+    $FormatHint = 'Shorts（直式 9:16、45~60 秒、字卡 4~5 張，腳本全長約 200~260 字）'
+}
+
+# ---- 固定單元（金主 2026-11-09 訂，對標「蝦說 AI」改版）：週一新聞、週三防災、週日阿遠實測 ----
+# 規則在工作區 PROGRAMS.md；刪掉 PROGRAMS.md 即全部停用。系列日／GitHub 日優先。
+# 改日子：AYUAN_NEWS_DAY（預設 Monday）、AYUAN_FIRE_DAY（預設 Wednesday）；實測跟著長片日 AYUAN_LONG_DAY。
+$programHint = ""
+if ((Test-Path "PROGRAMS.md") -and -not $IsSeriesDay -and -not $IsGithubDay) {
+    $dow = (Get-Date).DayOfWeek.ToString()
+    $NewsDay = if ($env:AYUAN_NEWS_DAY) { $env:AYUAN_NEWS_DAY } else { 'Monday' }
+    $FireDay = if ($env:AYUAN_FIRE_DAY) { $env:AYUAN_FIRE_DAY } else { 'Wednesday' }
+    if ($dow -eq $NewsDay) {
+        $programHint = "【最優先·今天是週一 AI 新聞快報】動手前先讀 PROGRAMS.md 的「週一【AI 新聞快報】」段：上網找過去 7 天一般人有感的 AI 大新聞，事實以原始來源為準並在描述第一行附來源，**不要用 MEMORY.md 的一般待發題庫**；發完補進 PROGRAMS.md 已做清單。 "
+    } elseif ($dow -eq $FireDay) {
+        $programHint = "【最優先·今天是週三 AI × 防災】動手前先讀 PROGRAMS.md 的「週三【AI × 防災】」段，**嚴守防災內容紅線**：所有防災／逃生／急救建議必須對照消防署或縣市消防局等官方資料、描述第一行附官方來源，查不到官方依據的不講，AI 說法與官方不同時以官方為準；可用 python pipeline\ask_ai.py 實際問 AI；播放清單「AI × 防災」；**不要用 MEMORY.md 的一般待發題庫**；發完補進 PROGRAMS.md 已做清單。 "
+    } elseif ($dow -eq $LongDay) {
+        $wk = [Globalization.CultureInfo]::InvariantCulture.Calendar.GetWeekOfYear((Get-Date), [Globalization.CalendarWeekRule]::FirstFourDayWeek, [DayOfWeek]::Monday)
+        $kind = if ($wk % 2 -eq 1) { '防災實測（嚴守 PROGRAMS.md 週三段的防災內容紅線）' } else { '一般 AI 實測' }
+        $programHint = "【最優先·今天是週日阿遠實測，本週＝$kind】這不是講解片，是阿遠真的去測 AI 的實驗片。動手前先讀 PROGRAMS.md 的「週日【阿遠實測】」段：設計一個可測的問題、用 python pipeline\ask_ai.py ask 實際問 ChatGPT 與 Claude（原文存檔，引用不可改寫）、有根據地評分、對話截圖卡放進字卡、阿遠插圖至少 2 張、播放清單「阿遠實測」；**不要用 MEMORY.md 的一般待發題庫**；發完補進 PROGRAMS.md 已做清單。 "
+    }
+    if ($programHint) { "PROGRAM=ON（$dow）" | Add-Content $log }
+}
 
 $maxAttempts = 2
 # claude 子程序逾時上限：防止 CLI 卡死導致整個心跳無限阻塞——「卡住」是沒產出也沒告警的元兇
-# （曾在週日長片日因 claude -p 無 timeout 卡死，整天沒發片也沒推播）。
+# （2026-06-28 週日長片日就因 claude -p 無 timeout 卡死，整天沒發片也沒推播）。
 # 可用環境變數 AYUAN_ATTEMPT_TIMEOUT_SEC 覆蓋，預設 1500 秒（25 分鐘，含產線+上傳綽綽有餘）。
 $attemptTimeoutSec = if ($env:AYUAN_ATTEMPT_TIMEOUT_SEC) { [int]$env:AYUAN_ATTEMPT_TIMEOUT_SEC } else { 1500 }
+# 週日實測要問 AI、字卡 8~12 張，放寬到 1650 秒；2 次嘗試＋間隔仍要塞進排程的 1 小時執行上限（PT1H）。
+if ($env:VIDEO_VERTICAL -eq '0' -and -not $env:AYUAN_ATTEMPT_TIMEOUT_SEC) { $attemptTimeoutSec = 1650 }
 # 解析 claude 執行檔：npm 安裝時是 claude.ps1（外部腳本），需用 powershell -File 啟動才能 PassThru 控制與逾時強殺。
 $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
 $seriesHint = if ($IsSeriesDay) { "【最優先·今天是系列日】今天出的是 SERIES.md 指定的主題系列，不是一般科普題。動手前務必先完整讀過工作區的 SERIES.md，然後：依它的選題順序與已講清單挑題（**不要用 MEMORY.md 的一般待發題庫**）、照它指定的腳本型態寫、標題與描述套它的 SEO 規則、加它指定的播放清單、遵守它的內容準則；發完把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
 if ($IsGithubDay) { $seriesHint = "【最優先·今天是 GitHub 日】今天介紹一個 GitHub 上 1000 顆星以上、還沒介紹過的開源專案，不是一般科普題。動手前務必先完整讀過工作區的 GITHUB.md，然後：用 python pipeline\github_repo.py search 找候選、定案前 python pipeline\github_repo.py check owner/repo 必須回 OK（**星數一律以工具查到的為準，不可憑印象**）、**不要用 MEMORY.md 的一般待發題庫**、照它的腳本型態與 SEO 規則寫、加「GitHub 寶藏專案」播放清單；發完把本集（含 github.com 網址）補進 GITHUB.md 的「已介紹專案」。 " }
-$prompt = "$seriesHint`n心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
+$prompt = "$seriesHint$programHint`n心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
 
 for ($i = 1; $i -le $maxAttempts; $i++) {
     "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o)（逾時上限 ${attemptTimeoutSec}s）===" | Add-Content $log
