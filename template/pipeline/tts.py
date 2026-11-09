@@ -23,12 +23,14 @@ def edge_variants(part: str):
         ("英文改小寫", re.sub(r"[A-Za-z]+", lambda m: m.group(0).lower(), part)),
         ("拿掉中英間空格", re.sub(r"(?<=[A-Za-z0-9])\s+(?=[一-鿿])|(?<=[一-鿿])\s+(?=[A-Za-z0-9])", "", part)),
         ("中英交界加逗號", re.sub(r"(?<=[A-Za-z0-9])\s+(?=[一-鿿])", "，", part)),
+        # 2026-11-09『那不是你打錯了——以前它真的做不到。』在 06:09 連續失敗（之後重測又正常）。
+        ("破折號／刪節號改逗號", re.sub(r"[—–―]+|…+|\.{3,}", "，", part)),
     ]
     for label, t in cands:
         if t not in seen and re.search(r"[\w一-鿿]", t):
             seen.add(t)
             yield label, [t]
-    pieces = [p for p in re.split(r"(?<=[，、,；;：:])", part) if re.search(r"[\w一-鿿]", p)]
+    pieces = [p for p in re.split(r"(?<=[，、,；;：:—…])", part) if re.search(r"[\w一-鿿]", p)]
     if len(pieces) > 1:
         yield "逗號處切開", pieces
 
@@ -87,19 +89,35 @@ async def tts_edge(text: str, out_path: str):
             if seg:
                 seg_files.append(seg)
                 continue
-            # 原句固定失敗 → 換念起來一樣的寫法再試（每種 3 次），全部失敗才降級機器音。
-            for label, pieces in edge_variants(part):
-                segs = []
-                for piece in pieces:
-                    s, last_err = await say(piece, 3)
-                    if not s:
+            # 原句固定失敗 → 換念起來一樣的寫法再試（每種 3 次）。
+            # 微軟端點有時整段時間不穩（2026-11-09 06:09 純中文句也失敗、事後重測正常），
+            # 所以全部失敗後再「冷卻等待」兩輪（預設 30 秒、90 秒）重來，都不行才降級機器音。
+            cooldowns = [int(x) for x in os.environ.get("EDGE_TTS_COOLDOWNS", "30,90").split(",") if x.strip()]
+            done = False
+            for rnd in range(len(cooldowns) + 1):
+                if rnd > 0:
+                    print(f"edge-tts 失敗，冷卻 {cooldowns[rnd-1]} 秒後重試：{part!r}")
+                    await _a.sleep(cooldowns[rnd - 1])
+                    seg, last_err = await say(part, 3)
+                    if seg:
+                        seg_files.append(seg)
+                        done = True
                         break
-                    segs.append(s)
-                if len(segs) == len(pieces):
-                    print(f"edge-tts 原句失敗，改用「{label}」成功：{part!r}")
-                    seg_files.extend(segs)
+                for label, pieces in edge_variants(part):
+                    segs = []
+                    for piece in pieces:
+                        s, last_err = await say(piece, 3)
+                        if not s:
+                            break
+                        segs.append(s)
+                    if len(segs) == len(pieces):
+                        print(f"edge-tts 原句失敗，改用「{label}」成功：{part!r}")
+                        seg_files.extend(segs)
+                        done = True
+                        break
+                if done:
                     break
-            else:
+            if not done:
                 raise RuntimeError(f"edge-tts 此句重試後仍失敗：{part!r}（{last_err}）")
 
         listfile = os.path.join(tmpdir, "list.txt")
