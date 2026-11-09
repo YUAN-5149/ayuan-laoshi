@@ -213,8 +213,8 @@ if ((Get-Date).DayOfWeek.ToString() -eq $LongDay) {
     $FormatHint = '長片（橫式 16:9、阿遠實測、約 3~6 分鐘、字卡 8~12 張）。【金主 2026-10-24 明確指定】今天一定要做橫式長片，不可自行改成直式 Shorts，MEMORY 裡「橫式長片已死」的舊結論不適用於今天'
 } else {
     $env:VIDEO_VERTICAL = '1'
-    # 2026-11-09 金主訂：Shorts 縮到 30~45 秒（舊版 70~110 秒，觀眾平均只看 28 秒就滑走）。
-    $FormatHint = 'Shorts（直式 9:16、30~45 秒、字卡 3~4 張、一支只講一個重點，腳本全長約 130~200 字）'
+    # 2026-11-09 曾試縮到 30~45 秒，金主看完覺得太短、不好看，同日改回原本長度（不可再自行縮短）。
+    $FormatHint = 'Shorts（直式 9:16、精簡明快、60~90 秒、字卡 4~6 張，腳本全長約 250~400 字）。【金主 2026-11-09 明確指定】不可自行縮短到 60 秒以下'
 }
 "FORMAT=$(if ($env:VIDEO_VERTICAL -eq '0') {'LONG 16:9'} else {'SHORTS 9:16'})（長片日=$LongDay）" | Add-Content $log
 
@@ -237,10 +237,7 @@ if ($IsSeriesDay) {
 $GithubDay = if ($env:AYUAN_GITHUB_DAY) { $env:AYUAN_GITHUB_DAY } else { 'Saturday' }
 $IsGithubDay = (-not $IsSeriesDay) -and ((Get-Date).DayOfWeek.ToString() -eq $GithubDay) -and (Test-Path "GITHUB.md")
 if ($IsGithubDay) { "GITHUB=ON（今天 $((Get-Date).DayOfWeek) 是 GitHub 日，將依 GITHUB.md 選專案）" | Add-Content $log }
-# 系列片與 GitHub 片要講題目／專案，給到 45~60 秒。
-if (($IsSeriesDay -or $IsGithubDay) -and $env:VIDEO_VERTICAL -eq '1') {
-    $FormatHint = 'Shorts（直式 9:16、45~60 秒、字卡 4~5 張，腳本全長約 200~260 字）'
-}
+# 系列片與 GitHub 片的長度與一般 Shorts 相同（60~90 秒），沿用上面的 FormatHint。
 
 # ---- 固定單元（金主 2026-11-09 訂，對標「蝦說 AI」改版）：週一新聞、週三防災、週日阿遠實測 ----
 # 規則在工作區 PROGRAMS.md；刪掉 PROGRAMS.md 即全部停用。系列日／GitHub 日優先。
