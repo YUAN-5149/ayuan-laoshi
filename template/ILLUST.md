@@ -67,6 +67,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\高知淵\.claude\
 - 中文 prompt 要先寫成 UTF-8 檔再傳路徑；**英文可直接傳字串**（建議都用英文，比較準）。
 - 回傳 `OK path=... size=...` 就是成功，把那個路徑接到 make_slide。
 
+## 會動的插圖（GIF，金主 2026-11-09 訂）
+Codex 的 imagegen **不能直接出 GIF**（實測會回 "Animated GIF export is unavailable"），改用「**一張圖畫 4 格連續動作 → 切開組成循環動畫**」。
+- **每支片 4 張插圖裡做 1~2 張動畫**，挑「動作本身就是重點」的段落（揮手、翻書、按按鈕、東西變大變小、火焰跳動…）；其餘照舊靜圖＋鏡頭微動。一張動畫格跟一張靜圖花的生圖時間一樣（約 65 秒）。
+- prompt 結構（英文，主體換成那段的動作，其他照抄）：
+```
+A 2x2 animation sprite sheet: four equal square panels in a grid, showing four consecutive keyframes of ONE short
+looping animation. <角色開頭句> <動作>: panel 1 (top-left) ..., panel 2 (top-right) ..., panel 3 (bottom-left) ...,
+panel 4 (bottom-right) .... CRITICAL: identical camera, identical character size and identical position in every
+panel, only <會動的部位> changes, so the frames can be played as an animation. No borders or gaps between panels.
+<固定結尾 A>
+```
+- 動作要**小而連續**（手、頭、手上道具、旁邊的小物件），不要整個人換姿勢或換位置，否則播起來會跳。
+- 生完接著切成動畫：
+```powershell
+python pipeline\make_anim.py "<draw-gpt 回傳的 path>" "output\<日期>\illust\seg3_anim"
+```
+  產出 `seg3_anim.png`（第 1 格）＋ `seg3_anim.gif`。**make_slide 照常傳 `seg3_anim.png` 當插圖**；make_video 看到同名 `.gif` 會自動在插圖框裡循環播動畫（字卡文字不動）。
+- 先 Read 看一下 sheet：4 格要是同一個阿遠、同位置；明顯不一致（換人、換背景、格子不是 2x2）就不要做動畫，直接拿其中一格當靜圖用。
+
 ## 配角（人物資產包，2026-11-09 金主提供）
 金主為了人物多樣性做了一批同畫風的配角。**主角永遠是阿遠，出場比例最高**；配角只在劇情需要「第二個人」時才請出來。
 正本：`C:\Users\高知淵\Documents\Codex\2026-10-24(各人物)\referenced-chatgpt-conversation-this-is-an\outputs\`

@@ -134,9 +134,27 @@ def main():
     ]
     parts = []
     n_illust = 0
+    n_anim = 0
     for i, dur in enumerate(durations):
         dframes = max(1, round(dur * fps))
         box = load_illust_box(slides[i])
+        anim = os.path.splitext(box["path"])[0] + ".gif" if box else None
+        if anim and os.path.exists(anim):
+            # 會動的插圖（make_anim.py 產的同名 .gif，金主 2026-11-09 訂）：字卡靜止，框裡循環播 GIF。
+            w, h = box["w"] // 2 * 2, box["h"] // 2 * 2
+            inputs += ["-ignore_loop", "0", "-i", os.path.abspath(anim)]
+            parts.append(
+                f"[{i}:v]scale={OUT_W}:{OUT_H},setsar=1,"
+                f"loop=loop={dframes - 1}:size=1:start=0,setpts=N/{fps}/TB[bg{i}]"
+            )
+            parts.append(
+                f"[{next_idx}:v]fps={fps},scale={w}:{h}:flags=lanczos,setsar=1,"
+                f"trim=end_frame={dframes},setpts=N/{fps}/TB[il{i}]"
+            )
+            parts.append(f"[bg{i}][il{i}]overlay={box['x']}:{box['y']}:shortest=1,format=yuv420p[v{i}]")
+            next_idx += 1
+            n_anim += 1
+            continue
         if box:
             # 字卡本體靜止，插圖放大 4 倍再 zoompan（降低整數座標造成的抖動），疊回原位。
             z, mx, my = (e.replace("/D", f"/{dframes}") for e in illust_moves[n_illust % len(illust_moves)])
@@ -162,6 +180,8 @@ def main():
         )
     if n_illust:
         print(f"（{n_illust} 張插圖字卡套用框內鏡頭微動）")
+    if n_anim:
+        print(f"（{n_anim} 張插圖字卡播放 GIF 動畫）")
     parts.append("".join(f"[v{i}]" for i in range(len(slides)))
                  + f"concat=n={len(slides)}:v=1:a=0[vc]")
     if subs:
