@@ -4,7 +4,8 @@ Codex 的 imagegen 只能出靜圖 PNG（2026-11-09 實測：要求 GIF 會回 "
 所以改叫 GPT 在一張圖裡畫 4 格連續動作（sprite sheet），再由這支切開組成循環動畫。
 
 用法：
-  python pipeline\\make_anim.py <sheet.png> <輸出主檔名> [fps=6] [順序=1,2,3,4,3,2]
+  python pipeline\\make_anim.py <sheet.png> <輸出主檔名> [fps=6] [順序=1,2,3,4,3,2] [noalign]
+    （角色會移動的動作，例如鑽到桌下：順序給 1,2,3,4,4,4、第 5 參數 noalign，播一次動作再停在最後一格）
     例：python pipeline\\make_anim.py output\\20261110\\illust\\seg3_xxx.png output\\20261110\\illust\\seg3_anim
 產出：
   <輸出主檔名>.png  第 1 格（給 make_slide 當插圖用，字卡排版照舊）
@@ -62,7 +63,9 @@ def main():
     sheet, base = sys.argv[1], sys.argv[2]
     fps = int(sys.argv[3]) if len(sys.argv) > 3 else 6
     order = [int(x) for x in (sys.argv[4] if len(sys.argv) > 4 else "1,2,3,4,3,2").split(",")]
-    frames = align(split_sheet(sheet))
+    # 第 5 參數 noalign：角色本身會移動的動作（走過去、鑽到桌下）不要以腳底對齊，否則場景物件會跟著晃。
+    raw = split_sheet(sheet)
+    frames = raw if (len(sys.argv) > 5 and sys.argv[5] == "noalign") else align(raw)
     os.makedirs(os.path.dirname(os.path.abspath(base)), exist_ok=True)
     frames[0].save(base + ".png")
     tmp = base + "_frames"

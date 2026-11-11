@@ -13,6 +13,9 @@ import sys
 import tempfile
 
 
+_LAST_EDGE_REQ = [0.0]
+
+
 def edge_variants(part: str):
     """同一句念起來一樣的替代寫法。微軟端點對某些中英混排字串會固定回 NoAudioReceived，
     重試再多次都一樣（2026-11-03『研究顯示，Role prompting 在語氣…』只有原字串失敗，
@@ -61,12 +64,22 @@ async def tts_edge(text: str, out_path: str):
     seg_files = []
     counter = [0]
 
+    import time as _t
+    # 2026-11-11 實測：微軟端點開始限流，句子連發／1.5 秒重試會隨機 NoAudioReceived（約一半），
+    # 同一句間隔 3 秒連打 12 次全成功。所以每次請求前至少隔 EDGE_TTS_GAP 秒，重試再指數退避。
+    gap = float(os.environ.get("EDGE_TTS_GAP", "1.2"))
+    last_req = _LAST_EDGE_REQ  # 模組層級：narrate_slides 逐段呼叫時，跨段也維持間隔
+
     async def say(piece, tries):
         """合成一小段，成功回傳檔案路徑，失敗回 (None, 最後錯誤)。"""
         seg = os.path.join(tmpdir, f"seg_{counter[0]:03d}.mp3")
         counter[0] += 1
         last_err = None
         for attempt in range(tries):
+            wait = gap - (_t.monotonic() - last_req[0])
+            if wait > 0:
+                await _a.sleep(wait)
+            last_req[0] = _t.monotonic()
             try:
                 # 2026-07-11 起微軟端點對 rate/prosody 參數回 NoAudioReceived（無 rate 正常）。
                 # 前 2 次照設定帶 rate（未來端點修好自動恢復 +8% 語速），之後改無 rate 保住品牌人聲。
@@ -79,7 +92,7 @@ async def tts_edge(text: str, out_path: str):
                     return seg, None
             except Exception as e:  # NoAudioReceived 等間歇性錯誤
                 last_err = e
-            await _a.sleep(1.5)
+            await _a.sleep(min(3 * (2 ** attempt), 20))  # 3、6、12、20 秒退避
         return None, last_err
 
     try:
