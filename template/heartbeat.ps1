@@ -259,13 +259,15 @@ if ((Test-Path "PROGRAMS.md") -and -not $IsSeriesDay -and -not $IsGithubDay) {
     if ($programHint) { "PROGRAM=ON（$dow）" | Add-Content $log }
 }
 
+# 2026-11-12：edge-tts 被限流時配音可拖 40 分鐘，1500s 兩次都來不及上傳 → 每次放寬到 3000s（週日 3300s），
+# 排程 ExecutionTimeLimit 同步改 PT2H30M（2×3300+90 秒內）。narrate_slides 另有逐段快取，第 2 次不會從頭配。
 $maxAttempts = 2
 # claude 子程序逾時上限：防止 CLI 卡死導致整個心跳無限阻塞——「卡住」是沒產出也沒告警的元兇
 # （2026-06-28 週日長片日就因 claude -p 無 timeout 卡死，整天沒發片也沒推播）。
 # 可用環境變數 AYUAN_ATTEMPT_TIMEOUT_SEC 覆蓋，預設 1500 秒（25 分鐘，含產線+上傳綽綽有餘）。
-$attemptTimeoutSec = if ($env:AYUAN_ATTEMPT_TIMEOUT_SEC) { [int]$env:AYUAN_ATTEMPT_TIMEOUT_SEC } else { 1500 }
+$attemptTimeoutSec = if ($env:AYUAN_ATTEMPT_TIMEOUT_SEC) { [int]$env:AYUAN_ATTEMPT_TIMEOUT_SEC } else { 3000 }
 # 週日實測要問 AI、字卡 8~12 張，放寬到 1650 秒；2 次嘗試＋間隔仍要塞進排程的 1 小時執行上限（PT1H）。
-if ($env:VIDEO_VERTICAL -eq '0' -and -not $env:AYUAN_ATTEMPT_TIMEOUT_SEC) { $attemptTimeoutSec = 1650 }
+if ($env:VIDEO_VERTICAL -eq '0' -and -not $env:AYUAN_ATTEMPT_TIMEOUT_SEC) { $attemptTimeoutSec = 3300 }
 # 解析 claude 執行檔：npm 安裝時是 claude.ps1（外部腳本），需用 powershell -File 啟動才能 PassThru 控制與逾時強殺。
 $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
 $seriesHint = if ($IsSeriesDay) { "【最優先·今天是系列日】今天出的是 SERIES.md 指定的主題系列，不是一般科普題。動手前務必先完整讀過工作區的 SERIES.md，然後：依它的選題順序與已講清單挑題（**不要用 MEMORY.md 的一般待發題庫**）、照它指定的腳本型態寫、標題與描述套它的 SEO 規則、加它指定的播放清單、遵守它的內容準則；發完把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
