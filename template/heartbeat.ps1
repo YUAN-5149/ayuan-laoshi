@@ -272,7 +272,7 @@ if ($env:VIDEO_VERTICAL -eq '0' -and -not $env:AYUAN_ATTEMPT_TIMEOUT_SEC) { $att
 $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
 $seriesHint = if ($IsSeriesDay) { "【最優先·今天是系列日】今天出的是 SERIES.md 指定的主題系列，不是一般科普題。動手前務必先完整讀過工作區的 SERIES.md，然後：依它的選題順序與已講清單挑題（**不要用 MEMORY.md 的一般待發題庫**）、照它指定的腳本型態寫、標題與描述套它的 SEO 規則、加它指定的播放清單、遵守它的內容準則；發完把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
 if ($IsGithubDay) { $seriesHint = "【最優先·今天是 GitHub 日】今天介紹一個 GitHub 上 1000 顆星以上、還沒介紹過的開源專案，不是一般科普題。動手前務必先完整讀過工作區的 GITHUB.md，然後：用 python pipeline\github_repo.py search 找候選、定案前 python pipeline\github_repo.py check owner/repo 必須回 OK（**星數一律以工具查到的為準，不可憑印象**）、**不要用 MEMORY.md 的一般待發題庫**、照它的腳本型態與 SEO 規則寫、加「GitHub 寶藏專案」播放清單；發完把本集（含 github.com 網址）補進 GITHUB.md 的「已介紹專案」。 " }
-$prompt = "$seriesHint$programHint`n心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。"
+$prompt = "$seriesHint$programHint`n心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。【配音鐵則】narrate_slides.py 若印出 PARTIAL（exit 3）就立刻再執行同一指令直到印出 OK，絕對不要丟背景或說等通知就結束回合——回合一結束程序就被終止、今天就沒片。"
 
 for ($i = 1; $i -le $maxAttempts; $i++) {
     "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o)（逾時上限 ${attemptTimeoutSec}s）===" | Add-Content $log

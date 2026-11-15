@@ -104,8 +104,8 @@ async def tts_edge(text: str, out_path: str):
                 continue
             # 原句固定失敗 → 換念起來一樣的寫法再試（每種 3 次）。
             # 微軟端點有時整段時間不穩（2026-11-09 06:09 純中文句也失敗、事後重測正常），
-            # 所以全部失敗後再「冷卻等待」兩輪（預設 30 秒、90 秒）重來，都不行才降級機器音。
-            cooldowns = [int(x) for x in os.environ.get("EDGE_TTS_COOLDOWNS", "30,90").split(",") if x.strip()]
+            # 所以全部失敗後再「冷卻等待」兩輪（預設 20 秒、40 秒；配合 narrate_slides 分輪，單段最壞約 5 分鐘）重來，都不行才降級機器音。
+            cooldowns = [int(x) for x in os.environ.get("EDGE_TTS_COOLDOWNS", "20,40").split(",") if x.strip()]
             done = False
             for rnd in range(len(cooldowns) + 1):
                 if rnd > 0:

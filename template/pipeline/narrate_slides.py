@@ -52,10 +52,27 @@ def main():
                               "stream=sample_rate", "-of", "csv=p=0", p], capture_output=True, text=True)
         return out.stdout.strip()
 
+    # 分輪完成（2026-11-15 加）：被限流時整支配音可超過 10 分鐘，Agent 的指令會被自動丟到背景、
+    # 它就說「等配音完成通知」結束回合 → 整條產線斷頭（11-11、11-15 兩次全滅）。
+    # 所以每次呼叫最多跑 NARRATE_BUDGET_SEC 秒（預設 240），時間到就印 PARTIAL、exit 3；
+    # 已配好的段落都在快取裡，**再執行同一個指令會接續**，重複到印出 OK 為止。
+    import time as _time
+    budget = float(os.environ.get("NARRATE_BUDGET_SEC", "240"))
+    t0 = _time.monotonic()
+    made_now = 0  # 本次新配的段數；每次呼叫至少配完一段才檢查時間，確保一定有進度
+
     tmp = tempfile.mkdtemp()
     seg_mp3s, durations = [], []
     try:
         for i, seg in enumerate(segs):
+            key0 = hashlib.sha1((voice_key + "|" + seg).encode("utf-8")).hexdigest()[:16]
+            is_cached = os.path.exists(os.path.join(cache_dir, key0 + ".mp3"))
+            if not is_cached and made_now > 0 and _time.monotonic() - t0 > budget:
+                done = sum(1 for s in segs if os.path.exists(os.path.join(
+                    cache_dir, hashlib.sha1((voice_key + "|" + s).encode("utf-8")).hexdigest()[:16] + ".mp3")))
+                print(f"PARTIAL：已配好 {done}/{len(segs)} 段（存在快取）。配音服務較慢，"
+                      f"請【立刻再執行一次同一個指令】接續，重複到印出 OK 為止；不要丟背景、不要結束回合。")
+                sys.exit(3)
             mp3 = os.path.join(tmp, f"s{i:03d}.mp3")
             key = hashlib.sha1((voice_key + "|" + seg).encode("utf-8")).hexdigest()[:16]
             cached = os.path.join(cache_dir, key + ".mp3")
@@ -64,6 +81,7 @@ def main():
                 print(f"（第 {i + 1} 段沿用快取配音）")
             else:
                 tts_lib.synth(seg, mp3)
+                made_now += 1
                 if sample_rate(mp3) == "24000":
                     _sh.copy(mp3, cached)
             seg_mp3s.append(mp3)
