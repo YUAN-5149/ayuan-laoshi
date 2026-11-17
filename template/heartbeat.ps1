@@ -239,16 +239,17 @@ $IsGithubDay = (-not $IsSeriesDay) -and ((Get-Date).DayOfWeek.ToString() -eq $Gi
 if ($IsGithubDay) { "GITHUB=ON（今天 $((Get-Date).DayOfWeek) 是 GitHub 日，將依 GITHUB.md 選專案）" | Add-Content $log }
 # 系列片與 GitHub 片的長度與一般 Shorts 相同（60~90 秒），沿用上面的 FormatHint。
 
-# ---- 固定單元（金主 2026-11-09 訂，對標「蝦說 AI」改版）：週一新聞、週三防災、週日阿遠實測 ----
+# ---- 固定單元（金主 2026-11-09 訂，對標「蝦說 AI」改版）：週一四五新聞、週三防災、週日阿遠實測 ----
+# 2026-11-17 金主改：週四五的 iPAS 系列改成 AI 新聞快報（黃仁勳辭職新聞 Shorts 1001 觀看，iPAS 近期 14~115）。
 # 規則在工作區 PROGRAMS.md；刪掉 PROGRAMS.md 即全部停用。系列日／GitHub 日優先。
-# 改日子：AYUAN_NEWS_DAY（預設 Monday）、AYUAN_FIRE_DAY（預設 Wednesday）；實測跟著長片日 AYUAN_LONG_DAY。
+# 改日子：AYUAN_NEWS_DAY（逗號分隔，預設 Monday,Thursday,Friday）、AYUAN_FIRE_DAY（預設 Wednesday）；實測跟著長片日 AYUAN_LONG_DAY。
 $programHint = ""
 if ((Test-Path "PROGRAMS.md") -and -not $IsSeriesDay -and -not $IsGithubDay) {
     $dow = (Get-Date).DayOfWeek.ToString()
-    $NewsDay = if ($env:AYUAN_NEWS_DAY) { $env:AYUAN_NEWS_DAY } else { 'Monday' }
+    $NewsDays = (($(if ($env:AYUAN_NEWS_DAY) { $env:AYUAN_NEWS_DAY } else { 'Monday,Thursday,Friday' })) -split ',') | ForEach-Object { $_.Trim() }
     $FireDay = if ($env:AYUAN_FIRE_DAY) { $env:AYUAN_FIRE_DAY } else { 'Wednesday' }
-    if ($dow -eq $NewsDay) {
-        $programHint = "【最優先·今天是週一 AI 新聞快報】動手前先讀 PROGRAMS.md 的「週一【AI 新聞快報】」段：上網找過去 7 天一般人有感的 AI 大新聞，事實以原始來源為準並在描述第一行附來源，**不要用 MEMORY.md 的一般待發題庫**；發完補進 PROGRAMS.md 已做清單。 "
+    if ($dow -in $NewsDays) {
+        $programHint = "【最優先·今天是 AI 新聞快報】動手前先讀 PROGRAMS.md 的「【AI 新聞快報】」段：上網找過去 7 天一般人有感的 AI 大新聞（優先大人物、大公司、大事件），**已做清單裡講過的新聞不可再講**，事實以原始來源為準並在描述第一行附來源，標題前段放主角名字，**不要用 MEMORY.md 的一般待發題庫**；播放清單「AI 新聞快報」；發完補進 PROGRAMS.md 已做清單。 "
     } elseif ($dow -eq $FireDay) {
         $programHint = "【最優先·今天是週三 AI × 防災】動手前先讀 PROGRAMS.md 的「週三【AI × 防災】」段，**嚴守防災內容紅線**：所有防災／逃生／急救建議必須對照消防署或縣市消防局等官方資料、描述第一行附官方來源，查不到官方依據的不講，AI 說法與官方不同時以官方為準；可用 python pipeline\ask_ai.py 實際問 AI；播放清單「AI × 防災」；**不要用 MEMORY.md 的一般待發題庫**；發完補進 PROGRAMS.md 已做清單。 "
     } elseif ($dow -eq $LongDay) {
