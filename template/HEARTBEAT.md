@@ -6,7 +6,8 @@
 0. **OAuth 憑證齊全嗎？** 若 `pipeline\client_secret.json` 不存在 → 立刻在 `MEMORY.md` 的「待金主爸爸處理」段落新增一行「缺 client_secret.json，請依 README 步驟 2 完成 YouTube OAuth 設定」（若已有同樣訊息就不重複加），然後**直接結束**。不要選題、不要寫腳本——發片到最後一步一定會失敗，做白工浪費 Claude 用量。
 1. **今天發片了嗎？** 查 `MEMORY.md` 的已發布清單。今天（以系統日期為準）還沒發 → 使用 youtube-video skill 執行完整製片流程。
    - **心跳訊息如果說「今天是系列日」** → **先讀 `SERIES.md`**，今天出的是該主題系列，選題／腳本型態／標題 SEO／播放清單／內容準則全依那份執行；發完把本集補進 SERIES.md 的「已講考點」。
+1b. **回觀眾留言**（金主 2026-11-18 訂，發完片後做；今天已發片也要做）：`python pipeline\comments.py list` 列出還沒回的留言，依 `COMMENTS.md` 的準則**懇切、虛心**地逐則回（`comments.py reply <threadId> <文字檔>`）。觀眾指出錯誤要先查證，屬實就坦白更正；好建議記進 MEMORY 題庫。這步失敗（例如 token 問題）就在 MEMORY 記一行，不影響發片。
 2. **前一支影片表現如何？** 若 `pipeline\token_analytics.json` 存在，先跑 `python pipeline\fetch_analytics.py` 更新 `ANALYTICS.md`（拉留存/觀看數）；選題時會用到。有新觀察就寫進 `MEMORY.md`。（尚未做過一次性 yt-analytics 授權則跳過，不要卡住發片。）
 3. **遇到無法解決的問題**（上傳失敗、產線錯誤等）→ 把問題清楚寫進 `MEMORY.md` 的「待金主爸爸處理」段落，然後結束。
 
-原則：一次心跳只推進一件主要任務。今天已發片就直接結束，不要重複發。
+原則：一次心跳只推進一件主要任務。今天已發片就不要重複發，只做 1b 回留言後結束。
