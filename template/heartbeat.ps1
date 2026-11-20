@@ -274,6 +274,11 @@ $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
 $seriesHint = if ($IsSeriesDay) { "【最優先·今天是系列日】今天出的是 SERIES.md 指定的主題系列，不是一般科普題。動手前務必先完整讀過工作區的 SERIES.md，然後：依它的選題順序與已講清單挑題（**不要用 MEMORY.md 的一般待發題庫**）、照它指定的腳本型態寫、標題與描述套它的 SEO 規則、加它指定的播放清單、遵守它的內容準則；發完把本集補進 SERIES.md 的「已講考點」。 " } else { "" }
 if ($IsGithubDay) { $seriesHint = "【最優先·今天是 GitHub 日】今天介紹一個 GitHub 上 1000 顆星以上、還沒介紹過的開源專案，不是一般科普題。動手前務必先完整讀過工作區的 GITHUB.md，然後：用 python pipeline\github_repo.py search 找候選、定案前 python pipeline\github_repo.py check owner/repo 必須回 OK（**星數一律以工具查到的為準，不可憑印象**）、**不要用 MEMORY.md 的一般待發題庫**、照它的腳本型態與 SEO 規則寫、加「GitHub 寶藏專案」播放清單；發完把本集（含 github.com 網址）補進 GITHUB.md 的「已介紹專案」。 " }
 $prompt = "$seriesHint$programHint`n心跳：今天影片格式＝$FormatHint。請讀取 HEARTBEAT.md，依清單檢查並執行今天的工作；腳本長度與字卡張數要配合上述格式。【配音鐵則】narrate_slides.py 若印出 PARTIAL（exit 3）就立刻再執行同一指令直到印出 OK，絕對不要丟背景或說等通知就結束回合——回合一結束程序就被終止、今天就沒片。"
+# 2026-11-20 修：Windows PowerShell 5.1 的 Start-Process -ArgumentList 不會替含空白的參數加引號，
+# 整段提示詞在第一個空白就被切斷，Agent 只收到「【最優先·今天是」幾個字（11-20 因此沒發片）。
+# 這裡自己包成一個帶引號的參數（依 Windows 命令列規則跳脫 " 與結尾反斜線）。
+$promptArg = '"' + ($prompt -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
+"PROMPT_LEN=$($prompt.Length)" | Add-Content $log
 
 for ($i = 1; $i -le $maxAttempts; $i++) {
     "=== Attempt $i / $maxAttempts @ $(Get-Date -Format o)（逾時上限 ${attemptTimeoutSec}s）===" | Add-Content $log
@@ -282,11 +287,11 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     # 風險已透過限縮工作目錄與 SOP 控制，勿在其他目錄使用此旗標。
     $outTmp = "logs\attempt-$i.out"; $errTmp = "logs\attempt-$i.err"
     if ($claudeCmd -and $claudeCmd.CommandType -eq 'ExternalScript') {
-        $startArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $claudeCmd.Source, '-p', $prompt, '--dangerously-skip-permissions')
+        $startArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $claudeCmd.Source, '-p', $promptArg, '--dangerously-skip-permissions')
         $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $startArgs -NoNewWindow -PassThru -RedirectStandardOutput $outTmp -RedirectStandardError $errTmp
     } else {
         $exe = if ($claudeCmd) { $claudeCmd.Source } else { 'claude' }
-        $proc = Start-Process -FilePath $exe -ArgumentList @('-p', $prompt, '--dangerously-skip-permissions') -NoNewWindow -PassThru -RedirectStandardOutput $outTmp -RedirectStandardError $errTmp
+        $proc = Start-Process -FilePath $exe -ArgumentList @('-p', $promptArg, '--dangerously-skip-permissions') -NoNewWindow -PassThru -RedirectStandardOutput $outTmp -RedirectStandardError $errTmp
     }
 
     $proc | Wait-Process -Timeout $attemptTimeoutSec -ErrorAction SilentlyContinue
