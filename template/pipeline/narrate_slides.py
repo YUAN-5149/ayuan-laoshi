@@ -59,18 +59,56 @@ def main():
     import time as _time
     budget = float(os.environ.get("NARRATE_BUDGET_SEC", "240"))
     t0 = _time.monotonic()
-    made_now = 0  # 本次新配的段數；每次呼叫至少配完一段才檢查時間，確保一定有進度
+    made_now = 0  # 本次嘗試配音的段數；每次呼叫至少試過一段才檢查時間，確保一定有進度
+
+    # 耐心重試人聲（2026-11-25 加）：11-24 只有 YunJhe 這個聲音間歇 NoAudioReceived（其他聲音正常），
+    # 舊流程一段失敗就立刻降級漢漢機器音。現在 edge-tts 失敗的段落先「跳過」、其他段照配，
+    # 結束時印 PARTIAL exit 3 讓 Agent 重跑同一指令再試；第一次失敗起超過 NARRATE_PATIENCE_SEC
+    # （預設 1200 秒＝20 分鐘）仍配不出來，才對剩下的段落降級機器音保發片。
+    # 計時存在 _tts_cache\_first_fail.txt，跨次呼叫延續。設 NARRATE_PATIENCE_SEC=0 等於舊行為。
+    patience = float(os.environ.get("NARRATE_PATIENCE_SEC", "1200"))
+    fail_mark = os.path.join(cache_dir, "_first_fail.txt")
+    use_edge = not (os.environ.get("GPT_SOVITS_API") or os.environ.get("ELEVENLABS_API_KEY"))
+
+    def waited():
+        try:
+            with open(fail_mark, encoding="utf-8") as f:
+                return _time.time() - float(f.read().strip())
+        except (OSError, ValueError):
+            return 0.0
+
+    def mark_fail():
+        if not os.path.exists(fail_mark):
+            with open(fail_mark, "w", encoding="utf-8") as f:
+                f.write(str(_time.time()))
+
+    def try_edge(seg, mp3):
+        """只試 edge-tts 人聲，成功（24kHz）回 True；失敗不降級。"""
+        import asyncio
+        try:
+            asyncio.run(tts_lib.tts_edge(seg, mp3))
+            return os.path.exists(mp3) and os.path.getsize(mp3) > 1000 and sample_rate(mp3) == "24000"
+        except Exception as e:
+            print(f"edge-tts 這段暫時配不出來，先跳過、稍後重試：{e}")
+            return False
+
+    def n_done():
+        return sum(1 for s in segs if os.path.exists(os.path.join(
+            cache_dir, hashlib.sha1((voice_key + "|" + s).encode("utf-8")).hexdigest()[:16] + ".mp3")))
+
+    give_up = use_edge and patience > 0 and waited() > patience
+    if give_up:
+        print(f"⚠ 人聲已重試超過 {patience:.0f} 秒仍有段落失敗，剩下的段落降級機器音保發片。")
 
     tmp = tempfile.mkdtemp()
     seg_mp3s, durations = [], []
+    skipped = 0
     try:
         for i, seg in enumerate(segs):
             key0 = hashlib.sha1((voice_key + "|" + seg).encode("utf-8")).hexdigest()[:16]
             is_cached = os.path.exists(os.path.join(cache_dir, key0 + ".mp3"))
             if not is_cached and made_now > 0 and _time.monotonic() - t0 > budget:
-                done = sum(1 for s in segs if os.path.exists(os.path.join(
-                    cache_dir, hashlib.sha1((voice_key + "|" + s).encode("utf-8")).hexdigest()[:16] + ".mp3")))
-                print(f"PARTIAL：已配好 {done}/{len(segs)} 段（存在快取）。配音服務較慢，"
+                print(f"PARTIAL：已配好 {n_done()}/{len(segs)} 段（存在快取）。配音服務較慢，"
                       f"請【立刻再執行一次同一個指令】接續，重複到印出 OK 為止；不要丟背景、不要結束回合。")
                 sys.exit(3)
             mp3 = os.path.join(tmp, f"s{i:03d}.mp3")
@@ -79,13 +117,34 @@ def main():
             if os.path.exists(cached) and os.path.getsize(cached) > 1000:
                 _sh.copy(cached, mp3)
                 print(f"（第 {i + 1} 段沿用快取配音）")
+            elif use_edge and patience > 0 and not give_up:
+                made_now += 1
+                if try_edge(seg, mp3):
+                    _sh.copy(mp3, cached)
+                else:
+                    mark_fail()
+                    skipped += 1
+                    continue
+            elif give_up:
+                # 已等超過耐心上限 → 直接機器音（不再跑一輪 edge 重試，否則每段又耗數分鐘、超出預算無限 PARTIAL）
+                if skipped == 0:
+                    tts_lib.alert_fallback(RuntimeError(f"人聲重試超過 {patience:.0f} 秒仍失敗"))
+                skipped = -1  # 只告警一次（之後不再進 PARTIAL 判斷，見下方 skipped > 0）
+                tts_lib.tts_sapi(seg, mp3)
+                made_now += 1
             else:
-                tts_lib.synth(seg, mp3)
+                tts_lib.synth(seg, mp3)  # 非 edge 後端（GPT-SoVITS / ElevenLabs）或 NARRATE_PATIENCE_SEC=0 → 原本行為
                 made_now += 1
                 if sample_rate(mp3) == "24000":
                     _sh.copy(mp3, cached)
             seg_mp3s.append(mp3)
             durations.append(duration(mp3))
+
+        if skipped > 0:
+            print(f"PARTIAL：已配好 {n_done()}/{len(segs)} 段，有 {skipped} 段人聲暫時失敗"
+                  f"（已重試 {waited():.0f}/{patience:.0f} 秒）。請【立刻再執行一次同一個指令】接續，"
+                  f"重複到印出 OK 為止；不要丟背景、不要結束回合。")
+            sys.exit(3)
 
         listf = os.path.join(tmp, "list.txt")
         with open(listf, "w", encoding="utf-8") as f:
@@ -102,6 +161,8 @@ def main():
         import shutil
         shutil.rmtree(tmp, ignore_errors=True)
 
+    if os.path.exists(fail_mark):  # 全部配好 → 清掉計時，之後同一天改稿重配時重新計算耐心
+        os.remove(fail_mark)
     print(f"OK: {out_path} ｜ 段數={len(segs)} ｜ 總長={sum(durations):.1f}s ｜ 各段={[round(d,1) for d in durations]}")
 
 
