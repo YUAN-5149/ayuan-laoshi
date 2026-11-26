@@ -66,7 +66,7 @@ def main():
     # 結束時印 PARTIAL exit 3 讓 Agent 重跑同一指令再試；第一次失敗起超過 NARRATE_PATIENCE_SEC
     # （預設 1200 秒＝20 分鐘）仍配不出來，才對剩下的段落降級機器音保發片。
     # 計時存在 _tts_cache\_first_fail.txt，跨次呼叫延續。設 NARRATE_PATIENCE_SEC=0 等於舊行為。
-    patience = float(os.environ.get("NARRATE_PATIENCE_SEC", "1200"))
+    patience = float(os.environ.get("NARRATE_PATIENCE_SEC", "600"))  # 11-27 由 1200 降為 600
     fail_mark = os.path.join(cache_dir, "_first_fail.txt")
     use_edge = not (os.environ.get("GPT_SOVITS_API") or os.environ.get("ELEVENLABS_API_KEY"))
 
@@ -85,6 +85,11 @@ def main():
     def try_edge(seg, mp3):
         """只試 edge-tts 人聲，成功（24kHz）回 True；失敗不降級。"""
         import asyncio
+        # 2026-11-27：YunJhe 對特定字串「固定」失敗（同一句連打必敗、改參數/標點/簡體都救不了），
+        # tts_edge 內建的 5 次重試＋冷卻 20/40 秒每句白耗 3~5 分鐘 → 11-25、11-27 整次逾時沒上傳。
+        # 跨輪重試交給本程式的耐心機制，這裡每句只快速試 2 次、不冷卻。
+        os.environ.setdefault("EDGE_TTS_TRIES", "2")
+        os.environ["EDGE_TTS_COOLDOWNS"] = os.environ.get("NARRATE_EDGE_COOLDOWNS", "")
         try:
             asyncio.run(tts_lib.tts_edge(seg, mp3))
             return os.path.exists(mp3) and os.path.getsize(mp3) > 1000 and sample_rate(mp3) == "24000"
